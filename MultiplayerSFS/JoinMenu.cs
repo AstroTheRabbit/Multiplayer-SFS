@@ -1,9 +1,9 @@
 using System.Net;
 using UnityEngine;
-using SFS.UI.ModGUI;
 using SFS.UI;
-using MultiplayerSFS.Networking.Packets;
+using SFS.UI.ModGUI;
 using MultiplayerSFS.Networking;
+using MultiplayerSFS.Networking.Packets;
 
 namespace MultiplayerSFS.GUI
 {
@@ -11,8 +11,8 @@ namespace MultiplayerSFS.GUI
     {
         public IPAddress ipAddress = IPAddress.Parse("127.0.0.1");
         public int port = 7579;
-        public string username = "";
         public string password = "";
+        public string username = "";
 
         public JoinPacket ToPacket()
         {
@@ -116,16 +116,26 @@ namespace MultiplayerSFS.GUI
                 return;
             }
 
-            Client client = await Client.RequestConnection(joinInfo);
-            if (!client.Successful)
+            switch (await ClientConnectionManager.ConnectToHost(joinInfo))
             {
-                Debug.Log(client.exception);
-                MsgDrawer.main.Log("Unable to connect!");
+                case JoinResponsePacket.JoinResponse.Accepted:
+                    MsgDrawer.main.Log("Connection successful!");
+                    break;
+                case JoinResponsePacket.JoinResponse.Denied_IncorrectPassword:
+                    MsgDrawer.main.Log("Incorrect password");
+                    return;
+                case JoinResponsePacket.JoinResponse.Denied_MaxPlayersReached:
+                    MsgDrawer.main.Log("Server full");
+                    return;
+                case JoinResponsePacket.JoinResponse.Denied_UsernameAlreadyInUse:
+                    MsgDrawer.main.Log("Username already in use");
+                    return;
+                default:
+                    MsgDrawer.main.Log("huh?");
+                    return;
             }
-            else
-            {
-                MsgDrawer.main.Log("Connection successful!");
-            }
+            
+            // TODO: Ask server for world info.
         }
     }
 }

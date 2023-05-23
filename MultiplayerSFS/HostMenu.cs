@@ -5,23 +5,26 @@ using SFS.UI.ModGUI;
 using SFS.WorldBase;
 using Button = SFS.UI.ModGUI.Button;
 using MultiplayerSFS.Networking;
+using System.Threading.Tasks;
 
 namespace MultiplayerSFS.GUI
 {
-    public enum TimewarpType
-    {
-        Disabled,
-        Resync // TODO: Implement.
-    }
     public class HostInfo
     {
         public int port = 7579;
+        public int maxPlayerCount = 10;
         public TimewarpType timewarpType = TimewarpType.Disabled;
         public float loadedRocketTickrate = 30;
         public float unloadedRocketTickrate = 1;
         public WorldReference world = new WorldReference("Multiplayer");
-        public string username = "";
         public string password = "";
+        public string username = "";
+        
+        public enum TimewarpType
+        {
+            Disabled,
+            Resync // TODO: Implement (when I can).
+        }
     }
 
     public class HostMenu : MultiplayerMenu
@@ -32,6 +35,7 @@ namespace MultiplayerSFS.GUI
         public HostInfo hostInfo = new HostInfo();
         Color defaultTextInputColor;
         TextInput Input_Port;
+        TextInput Input_MaxPlayerCount;
         Button TimewarpType_Disabled;
         // Button TimewarpType_Resync;
         TextInput Input_LoadedTickRate;
@@ -66,6 +70,22 @@ namespace MultiplayerSFS.GUI
             );
             defaultTextInputColor = Input_Port.FieldColor;
 
+            Builder.CreateLabel(settingLabels, 300, 50, text: "Max Player Count").TextAlignment = TMPro.TextAlignmentOptions.MidlineLeft;
+            Input_MaxPlayerCount = Builder.CreateTextInput(settingsValues, 620, 50, text: hostInfo.maxPlayerCount.ToString(),
+                onChange: (string input) =>
+                {
+                    if (int.TryParse(input, out int result) && result > 0)
+                    {
+                        Input_MaxPlayerCount.FieldColor = defaultTextInputColor;
+                        hostInfo.maxPlayerCount = result;
+                    }
+                    else
+                    {
+                        Input_MaxPlayerCount.FieldColor = Color.red;
+                    }
+                }
+            );
+
             Builder.CreateLabel(settingLabels, 300, 50, text: "Timewarp Type").TextAlignment = TMPro.TextAlignmentOptions.MidlineLeft;
             Container container = Builder.CreateContainer(settingsValues);
             container.CreateLayoutGroup(Type.Horizontal);
@@ -74,7 +94,7 @@ namespace MultiplayerSFS.GUI
                 {
                     TimewarpType_Disabled.gameObject.GetComponent<ButtonPC>().SetSelected(true);
                     // TimewarpType_Resync.gameObject.GetComponent<ButtonPC>().SetSelected(false);
-                    hostInfo.timewarpType = TimewarpType.Disabled;
+                    hostInfo.timewarpType = HostInfo.TimewarpType.Disabled;
                 }
             );
             // TimewarpType_Resync = Builder.CreateButton(container, 300, 50, text: "Subspace & Resync",
@@ -147,7 +167,7 @@ namespace MultiplayerSFS.GUI
             Builder.CreateButton(window, 300, 100, text: "Start Game", onClick: CheckAndStartHost);
         }
 
-        void CheckAndStartHost()
+        async void CheckAndStartHost()
         {
             if (!(int.TryParse(Input_Port.Text, out int n_port) && n_port > 0))
             {
@@ -170,14 +190,21 @@ namespace MultiplayerSFS.GUI
                 return;
             }
 
-            Host host = new Host(hostInfo);
-            if (host.BindAndStart())
+            if (HostConnectionManager.StartHost(hostInfo))
             {
                 MsgDrawer.main.Log("Server start successful!");
-                host.CreateConnectionManager();
+                while (true)
+                {
+                    if (!HostConnectionManager.listener.Pending())
+                        await Task.Yield();
+                    else
+                        HostConnectionManager.ManagePendingConnection();
+                }
             }
             else
-                MsgDrawer.main.Log("Unable to start server");
+            {
+                MsgDrawer.main.Log("Server start failed...");
+            }
         }
     }
 }

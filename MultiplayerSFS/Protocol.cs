@@ -1,8 +1,10 @@
 using System;
+using System.IO;
+using System.Linq;
 using System.Net.Sockets;
 using System.Threading.Tasks;
+using UnityEngine;
 using ProtoBuf;
-using System.IO;
 using MultiplayerSFS.Networking.Packets;
 
 namespace MultiplayerSFS.Networking
@@ -30,7 +32,7 @@ namespace MultiplayerSFS.Networking
             {
                 int bytesRead = state.socket.EndReceive(ar);
                 if (bytesRead != 4)
-                    throw new Exception("RecivePacketData - received size != 4 bytes!");
+                    throw new Exception("RecivePacket - received size != 4 bytes!");
                 state.dataSize = BitConverter.ToInt32(state.dataSizeBuffer, 0);
                 state.packetBuffer = new byte[state.dataSize];
                 state.currentRecieveProcess = state.socket.BeginReceive(state.packetBuffer, 0, state.dataSize, SocketFlags.None, new AsyncCallback(RecievePacketCallback), state);
@@ -40,7 +42,7 @@ namespace MultiplayerSFS.Networking
             {
                 int bytesRead = state.socket.EndReceive(ar);
                 if (bytesRead != state.dataSize)
-                    throw new Exception("RecivePacketData - Bytes read != recieved size!");
+                    throw new Exception("RecivePacket - Bytes read != recieved size!");
             }
         }
 
@@ -63,6 +65,68 @@ namespace MultiplayerSFS.Networking
                     throw new Exception("SendPacket - bytes sent != data size!");
             }
         }
+    }
 
+    public static class PacketManager
+    {
+        public static void OnRecievePacket(ReadOnlySpan<byte> packetData)
+        {
+            PacketType packetType = (PacketType) packetData[0];
+            ReadOnlySpan<byte> packetBytes = packetData.Slice(1);
+            switch (packetType)
+            {
+                case PacketType.Invalid:
+                    Debug.Log("Invalid packet recieved!");
+                    return;
+
+                case PacketType.Client_Join:
+                    JoinPacket join = Serializer.Deserialize<JoinPacket>(packetBytes);
+                    OnRecieve_Server_Join(join);
+                    return;
+
+                case PacketType.Server_JoinResponse:
+                    JoinResponsePacket joinResponse = Serializer.Deserialize<JoinResponsePacket>(packetBytes);
+                    OnRecieve_Client_JoinResponse(joinResponse);
+                    return;
+                
+                default:
+                    Debug.Log($"Missing implementation for packet type {packetType.ToString()}!");
+                    return;
+            }
+        }
+
+        static void OnRecieve_Server_Join(JoinPacket packet)
+        {
+            if (HostConnectionManager.Initialized)
+            {
+                if (packet.password == HostConnectionManager.hostInfo.password)
+                {
+                    if (HostConnectionManager.connectedPlayers.Count < HostConnectionManager.hostInfo.maxPlayerCount)
+                    {
+                        if (HostConnectionManager.connectedPlayers.All(p => p.username != packet.username))
+                        {
+                            HostConnectionManager.pendingConnection.Client.SendPacket(PacketType.Server_JoinResponse, new JoinResponsePacket() { response = JoinResponsePacket.JoinResponse.Accepted });
+                            return;
+                        }
+                        else
+                            HostConnectionManager.pendingConnection.Client.SendPacket(PacketType.Server_JoinResponse, new JoinResponsePacket() { response = JoinResponsePacket.JoinResponse.Denied_UsernameAlreadyInUse });
+                    }
+                    else
+                        HostConnectionManager.pendingConnection.Client.SendPacket(PacketType.Server_JoinResponse, new JoinResponsePacket() { response = JoinResponsePacket.JoinResponse.Denied_MaxPlayersReached });
+                }
+                else
+                    HostConnectionManager.pendingConnection.Client.SendPacket(PacketType.Server_JoinResponse, new JoinResponsePacket() { response = JoinResponsePacket.JoinResponse.Denied_IncorrectPassword });
+            }
+        }
+
+        static void OnRecieve_Client_JoinResponse(JoinResponsePacket packet)
+        {
+            if (packet.response != JoinResponsePacket.JoinResponse.Accepted)
+            {
+                ClientConnectionManager.client.Close();
+                ClientConnectionManager.client = null;
+            }
+            ClientConnectionManager.joinResponse = packet.response;
+        }
     }
 }
