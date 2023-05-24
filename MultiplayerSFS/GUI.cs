@@ -1,11 +1,10 @@
 using System.Collections.Generic;
-using System.Net;
 using UnityEngine;
 using SFS.Audio;
 using SFS.Input;
-using SFS.Translations;
 using SFS.UI;
 using SFS.UI.ModGUI;
+using SFS.Translations;
 
 namespace MultiplayerSFS.GUI
 {

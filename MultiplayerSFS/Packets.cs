@@ -1,17 +1,21 @@
 using ProtoBuf;
+using SFS.World;
+using SFS.WorldBase;
 
 namespace MultiplayerSFS.Networking.Packets
 {
     public enum PacketType : byte
     {
-        // Client/Server at start is who sent the packet.
+        // Client/Server at start the person recieving the packet.
         Invalid,
-        Client_Join,
-        Server_JoinResponse,
+        Server_JoinRequest,
+        Client_JoinResponse,
+        Server_WorldSaveRequest,
+        Client_WorldSaveResponse,
     }
 
     [ProtoContract]
-    public class JoinPacket
+    public class JoinRequestPacket
     {
         [ProtoMember(1)]
         public string username;
@@ -31,5 +35,22 @@ namespace MultiplayerSFS.Networking.Packets
             Denied_IncorrectPassword,
             Denied_MaxPlayersReached,
         }
+    }
+
+    [ProtoContract]
+    public class WorldSaveRequestPacket
+    {
+        
+    }
+
+    [ProtoContract]
+    public class WorldSaveReponsePacket
+    {
+        [ProtoMember(1)]
+        public TimewarpType timewarpType;
+        [ProtoMember(2)]
+        public WorldSave worldSave;
+        [ProtoMember(3)]
+        public WorldSettings worldSettings;
     }
 }

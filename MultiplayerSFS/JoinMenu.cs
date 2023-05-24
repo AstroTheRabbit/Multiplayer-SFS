@@ -14,9 +14,9 @@ namespace MultiplayerSFS.GUI
         public string password = "";
         public string username = "";
 
-        public JoinPacket ToPacket()
+        public JoinRequestPacket ToPacket()
         {
-            return new JoinPacket()
+            return new JoinRequestPacket()
             {
                 username = this.username,
                 password = this.password,
@@ -115,12 +115,19 @@ namespace MultiplayerSFS.GUI
                 MsgDrawer.main.Log("Port is invalid");
                 return;
             }
+            JoinResponsePacket.JoinResponse? joinResponse = await ClientConnectionManager.TryConnect(joinInfo);
+            if (!joinResponse.HasValue)
+            {
+                MsgDrawer.main.Log("Connection error");
+                return;
+            }
 
-            switch (await ClientConnectionManager.ConnectToHost(joinInfo))
+            switch (joinResponse.Value)
             {
                 case JoinResponsePacket.JoinResponse.Accepted:
                     MsgDrawer.main.Log("Connection successful!");
-                    break;
+
+                    return;
                 case JoinResponsePacket.JoinResponse.Denied_IncorrectPassword:
                     MsgDrawer.main.Log("Incorrect password");
                     return;
@@ -134,8 +141,6 @@ namespace MultiplayerSFS.GUI
                     MsgDrawer.main.Log("huh?");
                     return;
             }
-            
-            // TODO: Ask server for world info.
         }
     }
 }

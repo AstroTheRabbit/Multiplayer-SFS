@@ -1,11 +1,10 @@
-using System.Net.Sockets;
 using UnityEngine;
+using SFS;
 using SFS.UI;
 using SFS.UI.ModGUI;
 using SFS.WorldBase;
 using Button = SFS.UI.ModGUI.Button;
 using MultiplayerSFS.Networking;
-using System.Threading.Tasks;
 
 namespace MultiplayerSFS.GUI
 {
@@ -19,12 +18,6 @@ namespace MultiplayerSFS.GUI
         public WorldReference world = new WorldReference("Multiplayer");
         public string password = "";
         public string username = "";
-        
-        public enum TimewarpType
-        {
-            Disabled,
-            Resync // TODO: Implement (when I can).
-        }
     }
 
     public class HostMenu : MultiplayerMenu
@@ -94,7 +87,7 @@ namespace MultiplayerSFS.GUI
                 {
                     TimewarpType_Disabled.gameObject.GetComponent<ButtonPC>().SetSelected(true);
                     // TimewarpType_Resync.gameObject.GetComponent<ButtonPC>().SetSelected(false);
-                    hostInfo.timewarpType = HostInfo.TimewarpType.Disabled;
+                    hostInfo.timewarpType = TimewarpType.Disabled;
                 }
             );
             // TimewarpType_Resync = Builder.CreateButton(container, 300, 50, text: "Subspace & Resync",
@@ -167,7 +160,7 @@ namespace MultiplayerSFS.GUI
             Builder.CreateButton(window, 300, 100, text: "Start Game", onClick: CheckAndStartHost);
         }
 
-        async void CheckAndStartHost()
+        void CheckAndStartHost()
         {
             if (!(int.TryParse(Input_Port.Text, out int n_port) && n_port > 0))
             {
@@ -193,13 +186,11 @@ namespace MultiplayerSFS.GUI
             if (HostConnectionManager.StartHost(hostInfo))
             {
                 MsgDrawer.main.Log("Server start successful!");
-                while (true)
-                {
-                    if (!HostConnectionManager.listener.Pending())
-                        await Task.Yield();
-                    else
-                        HostConnectionManager.ManagePendingConnection();
-                }
+                HostConnectionManager.BeginListenThread();
+                Patches.MultiplayerEnabled = true;
+                Patches.timewarpType = hostInfo.timewarpType;
+
+                WorldBaseManager.EnterWorld(hostInfo.world.worldName, Base.sceneLoader.LoadHubScene);
             }
             else
             {

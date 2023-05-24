@@ -1,10 +1,7 @@
 ﻿using HarmonyLib;
-using UnityEngine;
 using ModLoader;
 using ModLoader.Helpers;
 using MultiplayerSFS.GUI;
-using MultiplayerSFS.Networking;
-using SFS.Parsers.Json;
 
 namespace MultiplayerSFS
 {
