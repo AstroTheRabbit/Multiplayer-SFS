@@ -1,0 +1,9 @@
+syntax = "proto3";
+package MultiplayerSFS.Packets;
+
+option csharp_namespace = "MultiplayerSFS.Packets";
+
+message TestPingPacket {
+    bool return = 1;
+    string message = 2;
+}
