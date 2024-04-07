@@ -1,4 +1,7 @@
 using System.Net;
+using System.Threading.Tasks;
+using MultiplayerSFS.Mod.Networking;
+using MultiplayerSFS.Packets;
 using SFS.Input;
 using SFS.UI;
 using SFS.UI.ModGUI;
@@ -140,30 +143,57 @@ namespace MultiplayerSFS.Mod.GUI
 
         async void CheckAndJoin()
         {
-            Input_IPAddress.FieldColor = defaultTextInputColor;
-            Input_Port.FieldColor      = defaultTextInputColor;
-            Input_Username.FieldColor  = defaultTextInputColor;
-            Input_Password.FieldColor  = defaultTextInputColor;
+            try
+            {
+                Input_IPAddress.FieldColor = defaultTextInputColor;
+                Input_Port.FieldColor      = defaultTextInputColor;
+                Input_Username.FieldColor  = defaultTextInputColor;
+                Input_Password.FieldColor  = defaultTextInputColor;
 
-            if (!IPAddress.TryParse(Input_IPAddress.Text, out IPAddress _))
-            {
-                Input_IPAddress.FieldColor = Color.red;
-                MsgDrawer.main.Log("IP address is invalid");
-                return;
+                if (!IPAddress.TryParse(Input_IPAddress.Text, out IPAddress _))
+                {
+                    Input_IPAddress.FieldColor = Color.red;
+                    MsgDrawer.main.Log("IP address is invalid");
+                    return;
+                }
+                if (!(int.TryParse(Input_Port.Text, out int n_port) && n_port > 0))
+                {
+                    Input_Port.FieldColor = Color.red;
+                    MsgDrawer.main.Log("Port is invalid");
+                    return;
+                }
+                if (string.IsNullOrWhiteSpace(Input_Username.Text))
+                {
+                    Input_Username.FieldColor = Color.red;
+                    MsgDrawer.main.Log("Username cannot be empty");
+                    return;
+                }
+                MsgDrawer.main.Log("Attempting to connect...");
+                
+                JoinResponsePacket joinResponse = await NetworkingManager.TryConnect(joinInfo);
+                switch (joinResponse.Response)
+                {
+                    case JoinResponsePacket.Types.JoinResponse.UnspecifiedBlocked:
+                        MsgDrawer.main.Log("Blocked by server (You may have been banned)");
+                        break;
+                    case JoinResponsePacket.Types.JoinResponse.UsernameAlreadyInUse:
+                        MsgDrawer.main.Log("Username already in use");
+                        Input_Username.FieldColor = Color.red;
+                        break;
+                    case JoinResponsePacket.Types.JoinResponse.IncorrectPassword:
+                        MsgDrawer.main.Log("Password is incorrect");
+                        Input_Password.FieldColor  = defaultTextInputColor;
+                        break;
+                    case JoinResponsePacket.Types.JoinResponse.AccessGranted:
+                        // TODO
+                        break;
+                }
             }
-            if (!(int.TryParse(Input_Port.Text, out int n_port) && n_port > 0))
+            catch (System.Exception e)
             {
-                Input_Port.FieldColor = Color.red;
-                MsgDrawer.main.Log("Port is invalid");
-                return;
+                MsgDrawer.main.Log("An error occured...");
+                Debug.Log(e);
             }
-            if (string.IsNullOrWhiteSpace(Input_Username.Text))
-            {
-                Input_Username.FieldColor = Color.red;
-                MsgDrawer.main.Log("Username cannot be empty");
-                return;
-            }
-            MsgDrawer.main.Log("Attempting to connect");
         }
     }
 }
