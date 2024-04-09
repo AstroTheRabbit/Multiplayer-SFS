@@ -4,3 +4,4 @@ BuildAndRun.sh
 */Dependencies/*
 */bin
 */obj
+*/server_config.json

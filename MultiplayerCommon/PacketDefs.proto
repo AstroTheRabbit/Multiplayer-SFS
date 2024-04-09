@@ -3,7 +3,7 @@ package MultiplayerSFS.Packets;
 
 option csharp_namespace = "MultiplayerSFS.Common.Packets";
 
-message JoinPacket {
+message JoinRequestPacket {
     string username = 1;
     string password = 2;
 }
@@ -18,3 +18,4 @@ message JoinResponsePacket {
 
     JoinResponse response = 1;
 }
+

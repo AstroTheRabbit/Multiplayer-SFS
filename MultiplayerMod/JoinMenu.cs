@@ -1,12 +1,11 @@
 using System.Net;
-using System.Threading.Tasks;
-using MultiplayerSFS.Mod.Networking;
-using MultiplayerSFS.Packets;
+using UnityEngine;
 using SFS.Input;
 using SFS.UI;
 using SFS.UI.ModGUI;
-using UnityEngine;
 using Type = SFS.UI.ModGUI.Type;
+using MultiplayerSFS.Common.Packets;
+using MultiplayerSFS.Mod.Networking;
 
 namespace MultiplayerSFS.Mod.GUI
 {
@@ -185,13 +184,13 @@ namespace MultiplayerSFS.Mod.GUI
                         Input_Password.FieldColor  = defaultTextInputColor;
                         break;
                     case JoinResponsePacket.Types.JoinResponse.AccessGranted:
-                        // TODO
+                        // TODO: Request/recieve world save to load world
                         break;
                 }
             }
             catch (System.Exception e)
             {
-                MsgDrawer.main.Log("An error occured...");
+                MsgDrawer.main.Log("An error occured... (Check console)");
                 Debug.Log(e);
             }
         }

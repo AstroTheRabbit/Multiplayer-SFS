@@ -10,7 +10,7 @@ namespace MultiplayerSFS.Common.Packets
 {
     public static class PacketUtils
     {
-        public static async void SendPacketAsync(this NetworkStream stream, IMessage packet)
+        public static async Task SendPacketAsync(this NetworkStream stream, IMessage packet)
         {
             byte[] packetType = Encoding.UTF8.GetBytes(packet.GetType().AssemblyQualifiedName);
             int packetTypeSize = packetType.Length;
@@ -27,7 +27,7 @@ namespace MultiplayerSFS.Common.Packets
 
         public static async Task<IMessage> RecievePacketAsync(this NetworkStream stream)
         {
-            // TODO: May have to check if all bytes are read.
+            // TODO: May have to add while loops to ensure all bytes are read.
 
             byte[] packetSizeBuffer = new byte[8];
             if (await stream.ReadAsync(packetSizeBuffer, 0, 8) < 8)

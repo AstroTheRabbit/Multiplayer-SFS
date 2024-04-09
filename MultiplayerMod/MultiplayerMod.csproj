@@ -6,6 +6,9 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="../MultiplayerCommon/*.cs"/>
+    <PackageReference Include="Google.Protobuf" Version="3.26.1"/>
+
     <Reference Include="0Harmony">
       <HintPath>Dependencies/0Harmony.dll</HintPath>
     </Reference>
@@ -45,9 +48,5 @@
     <Reference Include="UITools">
       <HintPath>Dependencies/UITools.dll</HintPath>
     </Reference>
-    <Reference Include="System"/>
-    <Reference Include="System.Core"/>
-    <PackageReference Include="Google.Protobuf" Version="3.26.1"/>
-    <Compile Include="../MultiplayerCommon/*.cs"/>
   </ItemGroup>
 </Project>

@@ -3,12 +3,12 @@
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFramework>net4.8</TargetFramework>
+    <PublishSingleFile>true</PublishSingleFile>
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- <Reference Include="System"/>
-    <Reference Include="System.Core"/> -->
-    <PackageReference Include="Google.Protobuf" Version="3.26.1"/>
     <Compile Include="../MultiplayerCommon/*.cs"/>
+    <PackageReference Include="Google.Protobuf" Version="3.26.1"/>
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
   </ItemGroup>
 </Project>

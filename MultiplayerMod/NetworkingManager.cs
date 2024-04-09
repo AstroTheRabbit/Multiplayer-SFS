@@ -1,7 +1,6 @@
 using System.Net.Sockets;
 using System.Threading.Tasks;
 using MultiplayerSFS.Mod.GUI;
-using MultiplayerSFS.Packets;
 using MultiplayerSFS.Common.Packets;
 
 namespace MultiplayerSFS.Mod.Networking
@@ -14,12 +13,12 @@ namespace MultiplayerSFS.Mod.Networking
         {
             client = new TcpClient();
             client.Connect(joinInfo.ipAddress, joinInfo.port);
-            JoinPacket joinPacket = new JoinPacket
+            JoinRequestPacket joinPacket = new JoinRequestPacket
             {
                 Username = joinInfo.username,
                 Password = joinInfo.password,
             };
-            client.GetStream().SendPacketAsync(joinPacket);
+            await client.GetStream().SendPacketAsync(joinPacket);
             if (await client.GetStream().RecievePacketAsync() is JoinResponsePacket joinResponse)
             {
                 return joinResponse;

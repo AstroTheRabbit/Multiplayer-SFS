@@ -9,7 +9,7 @@ using pb = global::Google.Protobuf;
 using pbc = global::Google.Protobuf.Collections;
 using pbr = global::Google.Protobuf.Reflection;
 using scg = global::System.Collections.Generic;
-namespace MultiplayerSFS.Packets {
+namespace MultiplayerSFS.Common.Packets {
 
   /// <summary>Holder for reflection information generated from PacketDefs.proto</summary>
   public static partial class PacketDefsReflection {
@@ -24,19 +24,19 @@ namespace MultiplayerSFS.Packets {
     static PacketDefsReflection() {
       byte[] descriptorData = global::System.Convert.FromBase64String(
           string.Concat(
-            "ChBQYWNrZXREZWZzLnByb3RvEhZNdWx0aXBsYXllclNGUy5QYWNrZXRzIjAK",
-            "CkpvaW5QYWNrZXQSEAoIdXNlcm5hbWUYASABKAkSEAoIcGFzc3dvcmQYAiAB",
-            "KAkiywEKEkpvaW5SZXNwb25zZVBhY2tldBJJCghyZXNwb25zZRgBIAEoDjI3",
-            "Lk11bHRpcGxheWVyU0ZTLlBhY2tldHMuSm9pblJlc3BvbnNlUGFja2V0Lkpv",
-            "aW5SZXNwb25zZSJqCgxKb2luUmVzcG9uc2USFgoSVW5zcGVjaWZpZWRCbG9j",
-            "a2VkEAASGAoUVXNlcm5hbWVBbHJlYWR5SW5Vc2UQARIVChFJbmNvcnJlY3RQ",
-            "YXNzd29yZBACEhEKDUFjY2Vzc0dyYW50ZWQQA0IZqgIWTXVsdGlwbGF5ZXJT",
-            "RlMuUGFja2V0c2IGcHJvdG8z"));
+            "ChBQYWNrZXREZWZzLnByb3RvEhZNdWx0aXBsYXllclNGUy5QYWNrZXRzIjcK",
+            "EUpvaW5SZXF1ZXN0UGFja2V0EhAKCHVzZXJuYW1lGAEgASgJEhAKCHBhc3N3",
+            "b3JkGAIgASgJIssBChJKb2luUmVzcG9uc2VQYWNrZXQSSQoIcmVzcG9uc2UY",
+            "ASABKA4yNy5NdWx0aXBsYXllclNGUy5QYWNrZXRzLkpvaW5SZXNwb25zZVBh",
+            "Y2tldC5Kb2luUmVzcG9uc2UiagoMSm9pblJlc3BvbnNlEhYKElVuc3BlY2lm",
+            "aWVkQmxvY2tlZBAAEhgKFFVzZXJuYW1lQWxyZWFkeUluVXNlEAESFQoRSW5j",
+            "b3JyZWN0UGFzc3dvcmQQAhIRCg1BY2Nlc3NHcmFudGVkEANCIKoCHU11bHRp",
+            "cGxheWVyU0ZTLkNvbW1vbi5QYWNrZXRzYgZwcm90bzM="));
       descriptor = pbr::FileDescriptor.FromGeneratedCode(descriptorData,
           new pbr::FileDescriptor[] { },
           new pbr::GeneratedClrTypeInfo(null, null, new pbr::GeneratedClrTypeInfo[] {
-            new pbr::GeneratedClrTypeInfo(typeof(global::MultiplayerSFS.Packets.JoinPacket), global::MultiplayerSFS.Packets.JoinPacket.Parser, new[]{ "Username", "Password" }, null, null, null, null),
-            new pbr::GeneratedClrTypeInfo(typeof(global::MultiplayerSFS.Packets.JoinResponsePacket), global::MultiplayerSFS.Packets.JoinResponsePacket.Parser, new[]{ "Response" }, null, new[]{ typeof(global::MultiplayerSFS.Packets.JoinResponsePacket.Types.JoinResponse) }, null, null)
+            new pbr::GeneratedClrTypeInfo(typeof(global::MultiplayerSFS.Common.Packets.JoinRequestPacket), global::MultiplayerSFS.Common.Packets.JoinRequestPacket.Parser, new[]{ "Username", "Password" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::MultiplayerSFS.Common.Packets.JoinResponsePacket), global::MultiplayerSFS.Common.Packets.JoinResponsePacket.Parser, new[]{ "Response" }, null, new[]{ typeof(global::MultiplayerSFS.Common.Packets.JoinResponsePacket.Types.JoinResponse) }, null, null)
           }));
     }
     #endregion
@@ -44,21 +44,21 @@ namespace MultiplayerSFS.Packets {
   }
   #region Messages
   [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
-  public sealed partial class JoinPacket : pb::IMessage<JoinPacket>
+  public sealed partial class JoinRequestPacket : pb::IMessage<JoinRequestPacket>
   #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
       , pb::IBufferMessage
   #endif
   {
-    private static readonly pb::MessageParser<JoinPacket> _parser = new pb::MessageParser<JoinPacket>(() => new JoinPacket());
+    private static readonly pb::MessageParser<JoinRequestPacket> _parser = new pb::MessageParser<JoinRequestPacket>(() => new JoinRequestPacket());
     private pb::UnknownFieldSet _unknownFields;
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public static pb::MessageParser<JoinPacket> Parser { get { return _parser; } }
+    public static pb::MessageParser<JoinRequestPacket> Parser { get { return _parser; } }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::MultiplayerSFS.Packets.PacketDefsReflection.Descriptor.MessageTypes[0]; }
+      get { return global::MultiplayerSFS.Common.Packets.PacketDefsReflection.Descriptor.MessageTypes[0]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -69,7 +69,7 @@ namespace MultiplayerSFS.Packets {
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public JoinPacket() {
+    public JoinRequestPacket() {
       OnConstruction();
     }
 
@@ -77,7 +77,7 @@ namespace MultiplayerSFS.Packets {
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public JoinPacket(JoinPacket other) : this() {
+    public JoinRequestPacket(JoinRequestPacket other) : this() {
       username_ = other.username_;
       password_ = other.password_;
       _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
@@ -85,8 +85,8 @@ namespace MultiplayerSFS.Packets {
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public JoinPacket Clone() {
-      return new JoinPacket(this);
+    public JoinRequestPacket Clone() {
+      return new JoinRequestPacket(this);
     }
 
     /// <summary>Field number for the "username" field.</summary>
@@ -116,12 +116,12 @@ namespace MultiplayerSFS.Packets {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public override bool Equals(object other) {
-      return Equals(other as JoinPacket);
+      return Equals(other as JoinRequestPacket);
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public bool Equals(JoinPacket other) {
+    public bool Equals(JoinRequestPacket other) {
       if (ReferenceEquals(other, null)) {
         return false;
       }
@@ -207,7 +207,7 @@ namespace MultiplayerSFS.Packets {
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public void MergeFrom(JoinPacket other) {
+    public void MergeFrom(JoinRequestPacket other) {
       if (other == null) {
         return;
       }
@@ -285,7 +285,7 @@ namespace MultiplayerSFS.Packets {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::MultiplayerSFS.Packets.PacketDefsReflection.Descriptor.MessageTypes[1]; }
+      get { return global::MultiplayerSFS.Common.Packets.PacketDefsReflection.Descriptor.MessageTypes[1]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -317,10 +317,10 @@ namespace MultiplayerSFS.Packets {
 
     /// <summary>Field number for the "response" field.</summary>
     public const int ResponseFieldNumber = 1;
-    private global::MultiplayerSFS.Packets.JoinResponsePacket.Types.JoinResponse response_ = global::MultiplayerSFS.Packets.JoinResponsePacket.Types.JoinResponse.UnspecifiedBlocked;
+    private global::MultiplayerSFS.Common.Packets.JoinResponsePacket.Types.JoinResponse response_ = global::MultiplayerSFS.Common.Packets.JoinResponsePacket.Types.JoinResponse.UnspecifiedBlocked;
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public global::MultiplayerSFS.Packets.JoinResponsePacket.Types.JoinResponse Response {
+    public global::MultiplayerSFS.Common.Packets.JoinResponsePacket.Types.JoinResponse Response {
       get { return response_; }
       set {
         response_ = value;
@@ -350,7 +350,7 @@ namespace MultiplayerSFS.Packets {
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public override int GetHashCode() {
       int hash = 1;
-      if (Response != global::MultiplayerSFS.Packets.JoinResponsePacket.Types.JoinResponse.UnspecifiedBlocked) hash ^= Response.GetHashCode();
+      if (Response != global::MultiplayerSFS.Common.Packets.JoinResponsePacket.Types.JoinResponse.UnspecifiedBlocked) hash ^= Response.GetHashCode();
       if (_unknownFields != null) {
         hash ^= _unknownFields.GetHashCode();
       }
@@ -369,7 +369,7 @@ namespace MultiplayerSFS.Packets {
     #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
       output.WriteRawMessage(this);
     #else
-      if (Response != global::MultiplayerSFS.Packets.JoinResponsePacket.Types.JoinResponse.UnspecifiedBlocked) {
+      if (Response != global::MultiplayerSFS.Common.Packets.JoinResponsePacket.Types.JoinResponse.UnspecifiedBlocked) {
         output.WriteRawTag(8);
         output.WriteEnum((int) Response);
       }
@@ -383,7 +383,7 @@ namespace MultiplayerSFS.Packets {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     void pb::IBufferMessage.InternalWriteTo(ref pb::WriteContext output) {
-      if (Response != global::MultiplayerSFS.Packets.JoinResponsePacket.Types.JoinResponse.UnspecifiedBlocked) {
+      if (Response != global::MultiplayerSFS.Common.Packets.JoinResponsePacket.Types.JoinResponse.UnspecifiedBlocked) {
         output.WriteRawTag(8);
         output.WriteEnum((int) Response);
       }
@@ -397,7 +397,7 @@ namespace MultiplayerSFS.Packets {
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public int CalculateSize() {
       int size = 0;
-      if (Response != global::MultiplayerSFS.Packets.JoinResponsePacket.Types.JoinResponse.UnspecifiedBlocked) {
+      if (Response != global::MultiplayerSFS.Common.Packets.JoinResponsePacket.Types.JoinResponse.UnspecifiedBlocked) {
         size += 1 + pb::CodedOutputStream.ComputeEnumSize((int) Response);
       }
       if (_unknownFields != null) {
@@ -412,7 +412,7 @@ namespace MultiplayerSFS.Packets {
       if (other == null) {
         return;
       }
-      if (other.Response != global::MultiplayerSFS.Packets.JoinResponsePacket.Types.JoinResponse.UnspecifiedBlocked) {
+      if (other.Response != global::MultiplayerSFS.Common.Packets.JoinResponsePacket.Types.JoinResponse.UnspecifiedBlocked) {
         Response = other.Response;
       }
       _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
@@ -431,7 +431,7 @@ namespace MultiplayerSFS.Packets {
             _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
             break;
           case 8: {
-            Response = (global::MultiplayerSFS.Packets.JoinResponsePacket.Types.JoinResponse) input.ReadEnum();
+            Response = (global::MultiplayerSFS.Common.Packets.JoinResponsePacket.Types.JoinResponse) input.ReadEnum();
             break;
           }
         }
@@ -450,7 +450,7 @@ namespace MultiplayerSFS.Packets {
             _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
             break;
           case 8: {
-            Response = (global::MultiplayerSFS.Packets.JoinResponsePacket.Types.JoinResponse) input.ReadEnum();
+            Response = (global::MultiplayerSFS.Common.Packets.JoinResponsePacket.Types.JoinResponse) input.ReadEnum();
             break;
           }
         }

@@ -6,6 +6,7 @@ using SFS.UI;
 using MultiplayerSFS.Mod.GUI;
 using SFS.Translations;
 using SFS.Audio;
+using System.Reflection;
 
 namespace MultiplayerSFS.Mod
 {
@@ -24,12 +25,14 @@ namespace MultiplayerSFS.Mod
 
         public override void Early_Load()
         {
+
             new Harmony(ModNameID).PatchAll();
             main = this;
         }
 
         public override void Load()
         {
+            Debug.Log(System.Environment.CurrentDirectory);
             AddMultiplayerButton();
             SceneHelper.OnHomeSceneLoaded += AddMultiplayerButton;
             Patches.Patches.multiplayerEnabled.OnChange += (bool value) => { Application.runInBackground = value; };
