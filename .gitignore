@@ -1,7 +1,8 @@
 .vscode
 .DS_Store
-BuildAndRun.sh
 */Dependencies/*
 */bin
 */obj
-*/server_config.json
+MultiplayerMod/RequiredDLLs
+MultiplayerServer/server_config.json
+MultiplayerServer/server_log.txt

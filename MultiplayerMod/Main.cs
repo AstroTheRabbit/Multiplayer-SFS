@@ -6,11 +6,13 @@ using SFS.UI;
 using MultiplayerSFS.Mod.GUI;
 using SFS.Translations;
 using SFS.Audio;
-using System.Reflection;
+using System;
+using System.IO;
+using System.Net;
 
 namespace MultiplayerSFS.Mod
 {
-    public class Main : ModLoader.Mod
+    public class Main : ModLoader.Mod//, IUpdatable
     {
         public static Main main;
         public override string ModNameID => "multiplayersfs";
@@ -21,21 +23,28 @@ namespace MultiplayerSFS.Mod
         public override string Description => "A mod that adds multiplayer ofc, what did you think it was?";
 
         public override Dictionary<string, string> Dependencies { get; } = new Dictionary<string, string> { { "UITools", "1.1.1" } };
-        // public Dictionary<string, FilePath> UpdatableFiles => new Dictionary<string, FilePath>() { { "https://github.com/pixelgaming579/Multiplayer-Mod-SFS/releases/latest/download/MultiplayerSFS.dll", new FolderPath(ModFolder).ExtendToFile("MultiplayerSFS.dll") } };
+        // public Dictionary<string, FilePath> UpdatableFiles => new Dictionary<string, FilePath>() { { "https://github.com/AstroTheRabbit/Multiplayer-Mod-SFS/releases/latest/download/MultiplayerMod.dll", new FolderPath(ModFolder).ExtendToFile("MultiplayerMod.dll") } };
 
         public override void Early_Load()
         {
-
             new Harmony(ModNameID).PatchAll();
             main = this;
         }
 
         public override void Load()
         {
-            Debug.Log(System.Environment.CurrentDirectory);
+            CheckLidgrenInstalled();
             AddMultiplayerButton();
             SceneHelper.OnHomeSceneLoaded += AddMultiplayerButton;
             Patches.Patches.multiplayerEnabled.OnChange += (bool value) => { Application.runInBackground = value; };
+        }
+
+        public static void CheckLidgrenInstalled()
+        {
+            if (!File.Exists(main.ModFolder + "Lidgren.Network.dll"))
+            {
+                HttpWebRequest request = HttpWebRequest.Create("https://github.com/AstroTheRabbit/Multiplayer-Mod-SFS/releases/latest/download/MultiplayerMod.dll");
+            }
         }
 
         public static void AddMultiplayerButton()

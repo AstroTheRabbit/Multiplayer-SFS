@@ -6,8 +6,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Include="../MultiplayerCommon/*.cs"/>
-    <PackageReference Include="Google.Protobuf" Version="3.26.1"/>
+    <Compile Include="../MultiplayerCommon/*.cs" />
+    <PackageReference Include="Lidgren.Network" Version="1.0.2" />
 
     <Reference Include="0Harmony">
       <HintPath>Dependencies/0Harmony.dll</HintPath>

@@ -1,59 +1,53 @@
-using System.Text;
-using System.Net.Sockets;
-using System.Threading.Tasks;
-using Google.Protobuf;
-using System.Reflection;
-using Google.Protobuf.Reflection;
 using System;
+using System.Collections.Generic;
+using System.Reflection;
+using Lidgren.Network;
 
 namespace MultiplayerSFS.Common.Packets
 {
     public static class PacketUtils
     {
-        public static async Task SendPacketAsync(this NetworkStream stream, IMessage packet)
+        static readonly Dictionary<string, DeserializerReflectionInfo> deserializerLookup = new Dictionary<string, DeserializerReflectionInfo>();
+
+        private class DeserializerReflectionInfo
         {
-            byte[] packetType = Encoding.UTF8.GetBytes(packet.GetType().AssemblyQualifiedName);
-            int packetTypeSize = packetType.Length;
-            int packetSize = packet.CalculateSize();
+            readonly Type packetType;
+            readonly MethodInfo deserializerMethod;
 
-            await stream.WriteAsync(BitConverter.GetBytes(packetTypeSize), 0, 4);
-            await stream.WriteAsync(BitConverter.GetBytes(packetSize), 0, 4);
+            public DeserializerReflectionInfo(Type type)
+            {
+                packetType = type;
+                deserializerMethod = type.GetMethod("Deserialize", BindingFlags.Public);
+            }
 
-            await stream.WriteAsync(packetType, 0, packetTypeSize);
-            await stream.WriteAsync(packet.ToByteArray(), 0, packetSize);
-
-            await stream.FlushAsync();
+            public IPacket Deserialize(NetIncomingMessage msg)
+            {
+                IPacket packet = (IPacket) Activator.CreateInstance(packetType);
+                deserializerMethod.Invoke(packet, new object[] { msg });
+                return packet;
+            }
         }
 
-        public static async Task<IMessage> RecievePacketAsync(this NetworkStream stream)
+        public static void SerializePacketToMessage(this NetOutgoingMessage msg, IPacket packet)
         {
-            // TODO: May have to add while loops to ensure all bytes are read.
+            msg.Write(packet.GetType().FullName);
+            packet.Serialize(msg);
+        }
 
-            byte[] packetSizeBuffer = new byte[8];
-            if (await stream.ReadAsync(packetSizeBuffer, 0, 8) < 8)
-            {
-                throw new Exception("RecievePacketAsync: Missing bytes for packet size!");
-            }
-
-            int packetTypeSize = BitConverter.ToInt32(packetSizeBuffer, 0);
-            int packetSize = BitConverter.ToInt32(packetSizeBuffer, 4);
-            int totalPacketSize = packetTypeSize + packetSize;
-
-            byte[] packetBuffer = new byte[totalPacketSize];
-            if (await stream.ReadAsync(packetBuffer, 0, totalPacketSize) < totalPacketSize)
-            {
-                throw new Exception("RecievePacketAsync: Missing bytes for packet!");
-            }
-
+        public static IPacket DeserializeMessageToPacket(this NetIncomingMessage msg)
+        {
+            string packetType = msg.ReadString();
             try
             {
-                Type packetType = Type.GetType(Encoding.UTF8.GetString(packetBuffer, 0, packetTypeSize));
-                MessageDescriptor descriptor = (MessageDescriptor) packetType.GetProperty("Descriptor", BindingFlags.Public | BindingFlags.Static).GetValue(null);
-                return descriptor.Parser.ParseFrom(packetBuffer, packetTypeSize, packetSize);
+                if (!deserializerLookup.ContainsKey(packetType))
+                {
+                    deserializerLookup.Add(packetType, new DeserializerReflectionInfo(Type.GetType(packetType)));
+                }
+                return deserializerLookup[packetType].Deserialize(msg);
             }
             catch (Exception e)
             {
-                throw new Exception("RecievePacketAsync: Reflection error! ", e);
+                throw new Exception("PacketUtils.DeserializePacket(): Reflection error! ", e);
             }
         }
     }

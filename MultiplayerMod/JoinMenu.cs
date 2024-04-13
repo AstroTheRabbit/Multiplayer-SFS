@@ -13,7 +13,7 @@ namespace MultiplayerSFS.Mod.GUI
     {
         public IPAddress ipAddress = IPAddress.Loopback;
         public int port = 9807;
-        public string username = "";
+        public string username = "DEFAULT_USERNAME";
         public string password = "";
     }
 
@@ -23,7 +23,7 @@ namespace MultiplayerSFS.Mod.GUI
         public static Window window;
         public static GameObject windowHolder;
         static readonly int windowID = Builder.GetRandomID();
-        static readonly Vector2Int windowSize = new Vector2Int(1000, 1000);
+        static readonly Vector2Int windowSize = new Vector2Int(1000, 500);
         protected override CloseMode OnEscape => CloseMode.Current;
 
         public JoinInfo joinInfo = new JoinInfo();
@@ -61,12 +61,12 @@ namespace MultiplayerSFS.Mod.GUI
             CreateUI();
         }
 
-        public override void OnClose()
+        public override void Close()
         {
-            if (ScreenManager.main.CurrentScreen == this)
+            if (ScreenManager.main.CurrentScreen == this && windowHolder != null)
             {
-                windowHolder.SetActive(false);
                 ScreenManager.main.CloseCurrent();
+                windowHolder.SetActive(false);
             }
         }
 
@@ -120,7 +120,8 @@ namespace MultiplayerSFS.Mod.GUI
             Input_Username = Builder.CreateTextInput(settingsValues, 620, 50, text: joinInfo.username,
                 onChange: (string input) =>
                 {
-                    joinInfo.username = input;
+                    Input_Username.Text = input.Trim();
+                    joinInfo.username = input.Trim();
                     Input_Username.FieldColor = defaultTextInputColor;
                 }
             );
@@ -137,7 +138,7 @@ namespace MultiplayerSFS.Mod.GUI
             Container backJoinButtons = Builder.CreateContainer(window);
             backJoinButtons.CreateLayoutGroup(Type.Horizontal, childAlignment: TextAnchor.MiddleLeft);
             Builder.CreateButton(backJoinButtons, 300, 100, text: "Back", onClick: Close);
-            Builder.CreateButton(backJoinButtons, 300, 100, text: "Join Game", onClick: CheckAndJoin);
+            Builder.CreateButton(backJoinButtons, 300, 100, text: "Join", onClick: CheckAndJoin);
         }
 
         async void CheckAndJoin()
@@ -172,19 +173,20 @@ namespace MultiplayerSFS.Mod.GUI
                 JoinResponsePacket joinResponse = await NetworkingManager.TryConnect(joinInfo);
                 switch (joinResponse.Response)
                 {
-                    case JoinResponsePacket.Types.JoinResponse.UnspecifiedBlocked:
+                    case JoinResponsePacket.JoinResponse.UnspecifiedBlocked:
                         MsgDrawer.main.Log("Blocked by server (You may have been banned)");
                         break;
-                    case JoinResponsePacket.Types.JoinResponse.UsernameAlreadyInUse:
+                    case JoinResponsePacket.JoinResponse.UsernameAlreadyInUse:
                         MsgDrawer.main.Log("Username already in use");
                         Input_Username.FieldColor = Color.red;
                         break;
-                    case JoinResponsePacket.Types.JoinResponse.IncorrectPassword:
+                    case JoinResponsePacket.JoinResponse.IncorrectPassword:
                         MsgDrawer.main.Log("Password is incorrect");
-                        Input_Password.FieldColor  = defaultTextInputColor;
+                        Input_Password.FieldColor = defaultTextInputColor;
                         break;
-                    case JoinResponsePacket.Types.JoinResponse.AccessGranted:
-                        // TODO: Request/recieve world save to load world
+                    case JoinResponsePacket.JoinResponse.AccessGranted:
+                        MsgDrawer.main.Log("Waiting for world data...");
+                        // TODO: Pass control over to NetworkingManager, request world state data (and loading screen?).
                         break;
                 }
             }
