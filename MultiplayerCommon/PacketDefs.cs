@@ -1,3 +1,4 @@
+using System;
 using Lidgren.Network;
 
 namespace MultiplayerSFS.Common.Packets
@@ -10,19 +11,19 @@ namespace MultiplayerSFS.Common.Packets
 
     public class JoinRequestPacket : IPacket
     {
-		public string Username { get; set; }
-		public string Password { get; set; }
+		public string username;
+		public string password;
 
         public void Deserialize(NetIncomingMessage msg)
         {
-            msg.Write(Username);
-            msg.Write(Password);
+            msg.Write(username);
+            msg.Write(password);
         }
 
         public void Serialize(NetOutgoingMessage msg)
         {
-            Username = msg.ReadString();
-            Password = msg.ReadString();
+            username = msg.ReadString();
+            password = msg.ReadString();
         }
     }
 
@@ -36,16 +37,16 @@ namespace MultiplayerSFS.Common.Packets
 			AccessGranted,
 		}
 
-		public JoinResponse Response { get; set; }
+		public JoinResponse response;
 
         public void Deserialize(NetIncomingMessage msg)
         {
-            msg.Write((byte) Response);
+            msg.Write((byte) response);
         }
 
         public void Serialize(NetOutgoingMessage msg)
         {
-            Response = (JoinResponse) msg.ReadByte();
+            response = (JoinResponse) msg.ReadByte();
         }
     }
 }

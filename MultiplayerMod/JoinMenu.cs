@@ -1,19 +1,19 @@
 using System.Net;
+using System.Threading;
 using UnityEngine;
 using SFS.Input;
 using SFS.UI;
 using SFS.UI.ModGUI;
-using Type = SFS.UI.ModGUI.Type;
-using MultiplayerSFS.Common.Packets;
 using MultiplayerSFS.Mod.Networking;
+using MultiplayerSFS.Common.Packets;
 
 namespace MultiplayerSFS.Mod.GUI
 {
     public class JoinInfo
     {
         public IPAddress ipAddress = IPAddress.Loopback;
-        public int port = 9807;
-        public string username = "DEFAULT_USERNAME";
+        public int port = 14242;
+        public string username = "DEFAULT // USERNAME";
         public string password = "";
     }
 
@@ -32,6 +32,7 @@ namespace MultiplayerSFS.Mod.GUI
         TextInput Input_Port;
         TextInput Input_Username;
         TextInput Input_Password;
+        readonly CancellationTokenSource connectCancelToken = new CancellationTokenSource();
 
         public static void OpenMenu() {
             windowHolder = Builder.CreateHolder(Builder.SceneToAttach.CurrentScene, "Multiplayer SFS - Join Menu Holder");
@@ -44,29 +45,32 @@ namespace MultiplayerSFS.Mod.GUI
             if (ScreenManager.main.CurrentScreen != this)
             {
                 ScreenManager.main.OpenScreen(() => this);
+                windowHolder.SetActive(true);
+                Patches.Patches.multiplayerEnabled.Value = true;
+                window = Builder.CreateWindow(
+                    windowHolder.transform,
+                    windowID,
+                    windowSize.x,
+                    windowSize.y,
+                    0,
+                    windowSize.y / 2,
+                    draggable: false,
+                    savePosition: false,
+                    titleText: "Multiplayer SFS - Join Menu"
+                );
+                CreateUI();
             }
 
-            windowHolder.SetActive(true);
-            window = Builder.CreateWindow(
-                windowHolder.transform,
-                windowID,
-                windowSize.x,
-                windowSize.y,
-                0,
-                windowSize.y / 2,
-                draggable: false,
-                savePosition: false,
-                titleText: "Multiplayer SFS - Join Menu"
-            );
-            CreateUI();
         }
 
         public override void Close()
         {
             if (ScreenManager.main.CurrentScreen == this && windowHolder != null)
             {
+                connectCancelToken.Cancel();
                 ScreenManager.main.CloseCurrent();
                 windowHolder.SetActive(false);
+                Patches.Patches.multiplayerEnabled.Value = false;
             }
         }
 
@@ -169,9 +173,10 @@ namespace MultiplayerSFS.Mod.GUI
                     return;
                 }
                 MsgDrawer.main.Log("Attempting to connect...");
-                
-                JoinResponsePacket joinResponse = await NetworkingManager.TryConnect(joinInfo);
-                switch (joinResponse.Response)
+
+                JoinResponsePacket joinResponse = await NetworkingManager.TryConnect(joinInfo, connectCancelToken.Token);
+
+                switch (joinResponse.response)
                 {
                     case JoinResponsePacket.JoinResponse.UnspecifiedBlocked:
                         MsgDrawer.main.Log("Blocked by server (You may have been banned)");
@@ -192,8 +197,15 @@ namespace MultiplayerSFS.Mod.GUI
             }
             catch (System.Exception e)
             {
-                MsgDrawer.main.Log("An error occured... (Check console)");
-                Debug.Log(e);
+                if (e is System.AggregateException ae && ae.InnerException is System.OperationCanceledException)
+                {
+                    MsgDrawer.main.Log("");
+                }
+                else
+                {
+                    MsgDrawer.main.Log("An error occured... (Check console)");
+                    Debug.Log(e);
+                }
             }
         }
     }

@@ -1,14 +1,14 @@
-﻿using HarmonyLib;
-using UnityEngine;
-using ModLoader.Helpers;
+﻿using System.IO;
 using System.Collections.Generic;
+using UnityEngine;
+using HarmonyLib;
 using SFS.UI;
-using MultiplayerSFS.Mod.GUI;
-using SFS.Translations;
 using SFS.Audio;
-using System;
-using System.IO;
+using SFS.Translations;
+using ModLoader.Helpers;
+using MultiplayerSFS.Mod.GUI;
 using System.Net;
+using System.Reflection;
 
 namespace MultiplayerSFS.Mod
 {
@@ -39,11 +39,23 @@ namespace MultiplayerSFS.Mod
             Patches.Patches.multiplayerEnabled.OnChange += (bool value) => { Application.runInBackground = value; };
         }
 
-        public static void CheckLidgrenInstalled()
+        public static async void CheckLidgrenInstalled()
         {
-            if (!File.Exists(main.ModFolder + "Lidgren.Network.dll"))
+            try
             {
-                HttpWebRequest request = HttpWebRequest.Create("https://github.com/AstroTheRabbit/Multiplayer-Mod-SFS/releases/latest/download/MultiplayerMod.dll");
+                string path = main.ModFolder + "/Lidgren.Network.dll";
+                if (!File.Exists(main.ModFolder + "Lidgren.Network.dll"))
+                {
+                    using (WebClient client = new WebClient())
+                    {
+                        await client.DownloadFileTaskAsync("https://github.com/AstroTheRabbit/Multiplayer-SFS/releases/download/lidgren/Lidgren.Network.dll", path);
+                    }
+                }
+                Assembly.LoadFrom(path);
+            }
+            catch (System.Exception e)
+            {
+                Debug.Log($"Failed to load Lidgren.Network.dll, which is required for multiplayer: {e}");
             }
         }
 

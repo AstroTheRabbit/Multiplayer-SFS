@@ -1,12 +1,11 @@
 using System;
-using System.Linq;
-using System.Collections.Generic;
-using MultiplayerSFS.Common.Packets;
 using System.IO;
-using Newtonsoft.Json;
 using System.Net;
 using System.Threading;
+using System.Collections.Generic;
+using Newtonsoft.Json;
 using Lidgren.Network;
+using MultiplayerSFS.Common.Packets;
 
 namespace MultiplayerSFS.Server
 {
@@ -14,7 +13,6 @@ namespace MultiplayerSFS.Server
     {
         static string password;
         static Dictionary<string, ConnectedPlayer> connectedPlayers;
-        static IPEndPoint ipEndPoint;
         static NetPeerConfiguration netConfig;
         static NetServer server;
         static Thread listenThread;
@@ -24,18 +22,36 @@ namespace MultiplayerSFS.Server
             string path = "server_config.json";
             if (!ServerConfig.TryLoad(path, out ServerConfig config))
             {
-                File.Create(path).Dispose();
-                string new_json = JsonConvert.SerializeObject(new ServerConfig(), Formatting.Indented);
-                File.WriteAllText(path, new_json);
-                Console.WriteLine("Main() - '{0}' created, edit to change server settings (password, port, etc).", path);
+                // File.Create(path).Dispose();
+                // string new_json = JsonConvert.SerializeObject(new ServerConfig(), Formatting.Indented);
+                // File.WriteAllText(path, new_json);
+                // Console.WriteLine("Main() - '{0}' created, edit to change server settings (password, port, etc).", path);
             }
 
             password = config.password;
             connectedPlayers = new Dictionary<string, ConnectedPlayer>();
 
-            ipEndPoint = new IPEndPoint(IPAddress.Any, config.port);
-            netConfig = new NetPeerConfiguration("MultiplayerSFS.Server");
+            netConfig = new NetPeerConfiguration("MultiplayerSFS")
+            {
+                Port = config.port,
+                AutoExpandMTU = true,
+                AcceptIncomingConnections = true,
+                MaximumConnections = config.maxPlayers,
+            };
+            netConfig.EnableMessageType(NetIncomingMessageType.Error);
+            netConfig.EnableMessageType(NetIncomingMessageType.StatusChanged);
+            netConfig.EnableMessageType(NetIncomingMessageType.UnconnectedData);
             netConfig.EnableMessageType(NetIncomingMessageType.ConnectionApproval);
+            netConfig.EnableMessageType(NetIncomingMessageType.Data);
+            netConfig.EnableMessageType(NetIncomingMessageType.Receipt);
+            netConfig.EnableMessageType(NetIncomingMessageType.DiscoveryRequest);
+            netConfig.EnableMessageType(NetIncomingMessageType.DiscoveryResponse);
+            netConfig.EnableMessageType(NetIncomingMessageType.VerboseDebugMessage);
+            netConfig.EnableMessageType(NetIncomingMessageType.DebugMessage);
+            netConfig.EnableMessageType(NetIncomingMessageType.WarningMessage);
+            netConfig.EnableMessageType(NetIncomingMessageType.ErrorMessage);
+            netConfig.EnableMessageType(NetIncomingMessageType.NatIntroductionSuccess);
+            netConfig.EnableMessageType(NetIncomingMessageType.ConnectionLatencyUpdated);
 
             server = new NetServer(netConfig);
             server.Start();
@@ -43,7 +59,7 @@ namespace MultiplayerSFS.Server
             listenThread = new Thread(Listen);
             listenThread.Start();
 
-            Console.WriteLine("Main() - Running SFS Multiplayer on port {0}.", ipEndPoint.Port);
+            Console.WriteLine("Main() - Running SFS Multiplayer at {0}:{1}.", server.Configuration.LocalAddress, server.Configuration.Port);
         }
 
         static void Listen()
@@ -60,12 +76,20 @@ namespace MultiplayerSFS.Server
                         switch (msg.MessageType)
                         {
                             case NetIncomingMessageType.ConnectionApproval:
+                                Console.WriteLine("Listen() - New Connection attempt.");
                                 CheckJoinRequest(msg);
                                 break;
-                            case NetIncomingMessageType.Data:
+                            case NetIncomingMessageType.WarningMessage:
+                                Console.ForegroundColor = ConsoleColor.Yellow;
+                                Console.WriteLine("WARN: \"{0}\"", msg.ReadString());
+                                Console.ResetColor();
                                 break;
+                            // case NetIncomingMessageType.Data:
+                            //     break;
                             default:
-                                Console.WriteLine($"Listen() - Recieved message of type {0} from {1}.", msg.MessageType, msg.SenderEndPoint);
+                                Console.ForegroundColor = ConsoleColor.Magenta;
+                                Console.WriteLine("Listen() - Recieved unhandled message of type '{0}' from '{1}'.", msg.MessageType, msg.SenderEndPoint);
+                                Console.ResetColor();
                                 break;
                         }
                     }
@@ -89,49 +113,46 @@ namespace MultiplayerSFS.Server
 
                 if (msg.DeserializeMessageToPacket() is JoinRequestPacket joinRequest)
                 {
-                    Console.WriteLine("CheckJoinRequests() - New join request recieved.");
-                    if (joinRequest.Password != password)
+                    Console.WriteLine("CheckJoinRequest() - Valid join request packet recieved.");
+
+                    if (joinRequest.password != password)
                     {
                         response.SerializePacketToMessage(new JoinResponsePacket()
                         {
-                            Response = JoinResponsePacket.JoinResponse.IncorrectPassword
+                            response = JoinResponsePacket.JoinResponse.IncorrectPassword
                         });
                     }
-                    else if (connectedPlayers.ContainsKey(joinRequest.Username))
+                    else if (connectedPlayers.ContainsKey(joinRequest.username))
                     {
                         response.SerializePacketToMessage(new JoinResponsePacket()
                         {
-                            Response = JoinResponsePacket.JoinResponse.UsernameAlreadyInUse
+                            response = JoinResponsePacket.JoinResponse.UsernameAlreadyInUse
                         });
                     }
 
                     response.SerializePacketToMessage(new JoinResponsePacket()
                     {
-                        Response = JoinResponsePacket.JoinResponse.AccessGranted
+                        response = JoinResponsePacket.JoinResponse.AccessGranted
                     });
                     
                     allowPlayer = true;
-                    connectedPlayers.Add(joinRequest.Username, new ConnectedPlayer(sender));
-                    Console.WriteLine($"CheckJoinRequests() - Player '{0}' joined.", joinRequest.Username);
+                    connectedPlayers.Add(joinRequest.username, new ConnectedPlayer(sender));
+                    Console.WriteLine($"CheckJoinRequest() - Player '{0}' joined.", joinRequest.username);
                 }
                 else
                 {
-                    Console.WriteLine("CheckPlayerJoining(): Recieved an incorrect packet type.");
+                    Console.WriteLine("CheckJoinRequest(): Recieved an incorrect packet type.");
                 }
 
                 server.SendMessage(response, sender, NetDeliveryMethod.ReliableOrdered);
                 if (allowPlayer)
-                {
                     sender.Approve();
-                }
                 else
-                {
                     sender.Deny();
-                }
             }
             catch (Exception e)
             {
-                Console.WriteLine("CheckPlayerJoining() - Encountered and exception: {0}", e);
+                Console.WriteLine("CheckJoinRequest() - Encountered and exception: {0}", e);
             }
         }
     }
@@ -139,7 +160,8 @@ namespace MultiplayerSFS.Server
     public class ServerConfig
     {
         public string password = "";
-        public int port = 9807;
+        public int port = 14242;
+        public int maxPlayers = 16;
 
         public static bool TryLoad(string path, out ServerConfig config)
         {

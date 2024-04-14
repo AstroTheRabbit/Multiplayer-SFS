@@ -1,6 +1,6 @@
 using System;
-using System.Collections.Generic;
 using System.Reflection;
+using System.Collections.Generic;
 using Lidgren.Network;
 
 namespace MultiplayerSFS.Common.Packets
@@ -11,18 +11,18 @@ namespace MultiplayerSFS.Common.Packets
 
         private class DeserializerReflectionInfo
         {
-            readonly Type packetType;
+            readonly ConstructorInfo constructorMethod;
             readonly MethodInfo deserializerMethod;
 
             public DeserializerReflectionInfo(Type type)
             {
-                packetType = type;
-                deserializerMethod = type.GetMethod("Deserialize", BindingFlags.Public);
+                constructorMethod = type.GetConstructor(Type.EmptyTypes);
+                deserializerMethod = type.GetMethod("Deserialize");
             }
 
             public IPacket Deserialize(NetIncomingMessage msg)
             {
-                IPacket packet = (IPacket) Activator.CreateInstance(packetType);
+                IPacket packet = (IPacket) constructorMethod.Invoke(null);
                 deserializerMethod.Invoke(packet, new object[] { msg });
                 return packet;
             }
@@ -40,14 +40,12 @@ namespace MultiplayerSFS.Common.Packets
             try
             {
                 if (!deserializerLookup.ContainsKey(packetType))
-                {
                     deserializerLookup.Add(packetType, new DeserializerReflectionInfo(Type.GetType(packetType)));
-                }
                 return deserializerLookup[packetType].Deserialize(msg);
             }
             catch (Exception e)
             {
-                throw new Exception("PacketUtils.DeserializePacket(): Reflection error! ", e);
+                throw new Exception("PacketUtils.DeserializeMessageToPacket(): Reflection on '" + packetType + "' encountered an error! ", e);
             }
         }
     }
