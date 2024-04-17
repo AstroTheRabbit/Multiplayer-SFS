@@ -36,7 +36,7 @@ namespace MultiplayerSFS.Mod
             CheckLidgrenInstalled();
             AddMultiplayerButton();
             SceneHelper.OnHomeSceneLoaded += AddMultiplayerButton;
-            Patches.Patches.multiplayerEnabled.OnChange += (bool value) => { Application.runInBackground = value; };
+            Patches.PatchesManager.multiplayerEnabled.OnChange += (bool value) => { Application.runInBackground = value; };
         }
 
         public static async void CheckLidgrenInstalled()

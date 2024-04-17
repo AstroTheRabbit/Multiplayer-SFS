@@ -9,6 +9,38 @@
   <ItemGroup>
     <Compile Include="../MultiplayerCommon/*.cs" />
     <PackageReference Include="Lidgren.Network" Version="1.0.2" />
-    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+    <Reference Include="Assembly-CSharp">
+      <HintPath>../MultiplayerMod/Dependencies/Assembly-CSharp.dll</HintPath>
+    </Reference>
+    <Reference Include="UnityEngine">
+      <HintPath>../MultiplayerMod/Dependencies/UnityEngine.dll</HintPath>
+    </Reference>
+    <Reference Include="UnityEngine.CoreModule">
+      <HintPath>../MultiplayerMod/Dependencies/UnityEngine.CoreModule.dll</HintPath>
+    </Reference>
+    <Reference Include="UnityEngine.UI">
+      <HintPath>../MultiplayerMod/Dependencies/UnityEngine.UI.dll</HintPath>
+    </Reference>
+    <Reference Include="UnityEngine.TextRenderingModule">
+      <HintPath>../MultiplayerMod/Dependencies/UnityEngine.TextRenderingModule.dll</HintPath>
+    </Reference>
+    <Reference Include="Unity.TextMeshPro">
+      <HintPath>../MultiplayerMod/Dependencies/UnityEngine.Unity.TextMeshPro.dll</HintPath>
+    </Reference>
+    <Reference Include="UnityEngine.PhysicsModule">
+      <HintPath>../MultiplayerMod/Dependencies/UnityEngine.PhysicsModule.dll</HintPath>
+    </Reference>
+    <Reference Include="UnityEngine.Physics2DModule">
+      <HintPath>../MultiplayerMod/Dependencies/UnityEngine.Physics2DModule.dll</HintPath>
+    </Reference>
+    <Reference Include="UnityEngine.UnityWebRequestModule">
+      <HintPath>../MultiplayerMod/Dependencies/UnityEngine.UnityWebRequestModule.dll</HintPath>
+    </Reference>
+    <Reference Include="UnityEngine.ImageConversionModule">
+      <HintPath>../MultiplayerMod/Dependencies/UnityEngine.ImageConversionModule.dll</HintPath>
+    </Reference>
+    <Reference Include="Newtonsoft.Json">
+      <HintPath>../MultiplayerMod/Dependencies/Newtonsoft.Json.dll</HintPath>
+    </Reference>
   </ItemGroup>
 </Project>

@@ -1,19 +1,18 @@
 using System.Net;
 using System.Threading;
 using UnityEngine;
-using SFS.Input;
 using SFS.UI;
+using SFS.Input;
 using SFS.UI.ModGUI;
 using MultiplayerSFS.Mod.Networking;
-using MultiplayerSFS.Common.Packets;
 
 namespace MultiplayerSFS.Mod.GUI
 {
     public class JoinInfo
     {
         public IPAddress ipAddress = IPAddress.Loopback;
-        public int port = 14242;
-        public string username = "DEFAULT // USERNAME";
+        public int port = 9807;
+        public string username = "DEFAULT_USERNAME";
         public string password = "";
     }
 
@@ -46,7 +45,7 @@ namespace MultiplayerSFS.Mod.GUI
             {
                 ScreenManager.main.OpenScreen(() => this);
                 windowHolder.SetActive(true);
-                Patches.Patches.multiplayerEnabled.Value = true;
+                Patches.PatchesManager.multiplayerEnabled.Value = true;
                 window = Builder.CreateWindow(
                     windowHolder.transform,
                     windowID,
@@ -68,9 +67,11 @@ namespace MultiplayerSFS.Mod.GUI
             if (ScreenManager.main.CurrentScreen == this && windowHolder != null)
             {
                 connectCancelToken.Cancel();
+                NetworkingManager.client?.Shutdown("");
+                Patches.PatchesManager.multiplayerEnabled.Value = false;
+                
                 ScreenManager.main.CloseCurrent();
                 windowHolder.SetActive(false);
-                Patches.Patches.multiplayerEnabled.Value = false;
             }
         }
 
@@ -174,25 +175,12 @@ namespace MultiplayerSFS.Mod.GUI
                 }
                 MsgDrawer.main.Log("Attempting to connect...");
 
-                JoinResponsePacket joinResponse = await NetworkingManager.TryConnect(joinInfo, connectCancelToken.Token);
+                (bool approved, string reason) = await NetworkingManager.TryConnect(joinInfo, connectCancelToken.Token);
 
-                switch (joinResponse.response)
+                MsgDrawer.main.Log(reason);
+                if (approved)
                 {
-                    case JoinResponsePacket.JoinResponse.UnspecifiedBlocked:
-                        MsgDrawer.main.Log("Blocked by server (You may have been banned)");
-                        break;
-                    case JoinResponsePacket.JoinResponse.UsernameAlreadyInUse:
-                        MsgDrawer.main.Log("Username already in use");
-                        Input_Username.FieldColor = Color.red;
-                        break;
-                    case JoinResponsePacket.JoinResponse.IncorrectPassword:
-                        MsgDrawer.main.Log("Password is incorrect");
-                        Input_Password.FieldColor = defaultTextInputColor;
-                        break;
-                    case JoinResponsePacket.JoinResponse.AccessGranted:
-                        MsgDrawer.main.Log("Waiting for world data...");
-                        // TODO: Pass control over to NetworkingManager, request world state data (and loading screen?).
-                        break;
+                    await NetworkingManager.LoadWorld();
                 }
             }
             catch (System.Exception e)
