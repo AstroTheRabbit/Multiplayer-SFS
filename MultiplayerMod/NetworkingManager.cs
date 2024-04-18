@@ -178,7 +178,7 @@ namespace MultiplayerSFS.Mod.Networking
                         worldBase,
                         new object[]
                         {
-                            new WorldReference(".MultiplayerSFS"),
+                            null,
                             settings,
                             (System.Action) sceneLoader.LoadHubScene
                         }

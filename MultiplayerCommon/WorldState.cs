@@ -25,6 +25,7 @@ namespace MultiplayerSFS.Common
             throttleOn = msg.ReadBoolean();
             throttlePercent = msg.ReadFloat();
             RCS = msg.ReadBoolean();
+            msg.ReadPadBits();
 
             int partsLength = msg.ReadInt32();
             parts = new List<int>(partsLength);
@@ -54,7 +55,30 @@ namespace MultiplayerSFS.Common
 
         public void Serialize(NetOutgoingMessage msg)
         {
-            throw new NotImplementedException();
+            msg.Write(name);
+            position.Serialize(msg);
+            msg.Write(throttleOn);
+            msg.Write(throttlePercent);
+            msg.Write(RCS);
+            msg.WritePadBits();
+
+            msg.Write(parts.Count);
+            foreach (int part in parts)
+            {
+                msg.Write(part);
+            }
+
+            msg.Write(joints.Count);
+            foreach (JointState joint in joints)
+            {
+                joint.Serialize(msg);
+            }
+
+            msg.Write(stages.Count);
+            foreach (StageState joint in stages)
+            {
+                joint.Serialize(msg);
+            }
         }
     }
 
