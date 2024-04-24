@@ -1,20 +1,22 @@
 ﻿using System.IO;
+using System.Net;
+using System.Reflection;
 using System.Collections.Generic;
 using UnityEngine;
 using HarmonyLib;
 using SFS.UI;
+using SFS.IO;
 using SFS.Audio;
 using SFS.Translations;
 using ModLoader.Helpers;
 using MultiplayerSFS.Mod.GUI;
-using System.Net;
-using System.Reflection;
 
 namespace MultiplayerSFS.Mod
 {
     public class Main : ModLoader.Mod//, IUpdatable
     {
         public static Main main;
+        public static FolderPath buildPersistentFolder;
         public override string ModNameID => "multiplayersfs";
         public override string DisplayName => "Multiplayer SFS";
         public override string Author => "Astro The Rabbit";
@@ -27,8 +29,8 @@ namespace MultiplayerSFS.Mod
 
         public override void Early_Load()
         {
-            new Harmony(ModNameID).PatchAll();
             main = this;
+            new Harmony(ModNameID).PatchAll();
         }
 
         public override void Load()
@@ -36,7 +38,8 @@ namespace MultiplayerSFS.Mod
             CheckLidgrenInstalled();
             AddMultiplayerButton();
             SceneHelper.OnHomeSceneLoaded += AddMultiplayerButton;
-            Patches.PatchesManager.multiplayerEnabled.OnChange += (bool value) => { Application.runInBackground = value; };
+            buildPersistentFolder = new FolderPath(ModFolder).Extend(".BlueprintPersistent");
+            Patches.Patches.multiplayerEnabled.OnChange += (bool value) => { Application.runInBackground = value; };
         }
 
         public static async void CheckLidgrenInstalled()
@@ -61,6 +64,8 @@ namespace MultiplayerSFS.Mod
 
         public static void AddMultiplayerButton()
         {
+            Patches.Patches.multiplayerEnabled.Value = false;
+            
             Transform buttons = GameObject.Find("Buttons").transform;
             GameObject playButton = GameObject.Find("Play Button");
             GameObject multiplayerButton = Object.Instantiate(playButton, buttons, true);

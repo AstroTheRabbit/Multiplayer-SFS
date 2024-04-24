@@ -45,7 +45,7 @@ namespace MultiplayerSFS.Mod.GUI
             {
                 ScreenManager.main.OpenScreen(() => this);
                 windowHolder.SetActive(true);
-                Patches.PatchesManager.multiplayerEnabled.Value = true;
+                Patches.Patches.multiplayerEnabled.Value = true;
                 window = Builder.CreateWindow(
                     windowHolder.transform,
                     windowID,
@@ -68,7 +68,7 @@ namespace MultiplayerSFS.Mod.GUI
             {
                 connectCancelToken.Cancel();
                 NetworkingManager.client?.Shutdown("");
-                Patches.PatchesManager.multiplayerEnabled.Value = false;
+                Patches.Patches.multiplayerEnabled.Value = false;
                 
                 ScreenManager.main.CloseCurrent();
                 windowHolder.SetActive(false);

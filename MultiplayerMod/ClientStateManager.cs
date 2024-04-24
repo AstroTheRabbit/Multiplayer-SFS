@@ -1,12 +1,7 @@
 using System.Collections.Generic;
-using UnityEngine;
-using SFS.World;
-using SFS.Career;
+using SFS.WorldBase;
 using MultiplayerSFS.Common;
 using MultiplayerSFS.Common.Packets;
-using SFS.Stats;
-using SFS.WorldBase;
-using System.Linq;
 
 namespace MultiplayerSFS.Mod.Networking
 {
@@ -23,6 +18,11 @@ namespace MultiplayerSFS.Mod.Networking
             difficulty = packet.difficulty;
             rockets = packet.rockets;
             parts = packet.parts;
+        }
+
+        public void OnLoadWorld()
+        {
+            // TODO: Load rockets into multiplayer world.
         }
 
         // public void UpdateRocket(UpdateRocketPacket change)

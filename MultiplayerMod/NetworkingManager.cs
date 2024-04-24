@@ -169,7 +169,7 @@ namespace MultiplayerSFS.Mod.Networking
                     WorldSettings settings = new WorldSettings(
                         new SolarSystemReference(""),
                         new Difficulty() { difficulty = packet.difficulty },
-                        new WorldMode(WorldMode.Mode.Sandbox),
+                        new WorldMode(WorldMode.Mode.Sandbox) { allowQuicksaves = false },
                         new WorldPlaytime(),
                         new SandboxSettings.Data()
                     );
@@ -185,6 +185,7 @@ namespace MultiplayerSFS.Mod.Networking
                     );
 
                     stateManager = new ClientStateManager(packet);
+
                     listenerThread = new Thread(Listen);
                     listenerThread.Start();
                 }
