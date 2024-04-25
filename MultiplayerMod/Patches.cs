@@ -1,5 +1,7 @@
 using System.Linq;
 using System.Threading;
+using System.Reflection;
+using System.Reflection.Emit;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -7,14 +9,17 @@ using HarmonyLib;
 using SFS;
 using SFS.IO;
 using SFS.UI;
+using SFS.Logs;
 using SFS.Input;
 using SFS.World;
+using SFS.Stats;
 using SFS.Builds;
 using SFS.Career;
 using SFS.WorldBase;
 using SFS.Variables;
-using SFS.Translations;
 using SFS.World.Maps;
+using SFS.Translations;
+using MultiplayerSFS.Mod.Networking;
 
 namespace MultiplayerSFS.Mod.Patches
 {
@@ -28,7 +33,6 @@ namespace MultiplayerSFS.Mod.Patches
         }
     }
 
-    // TODO: Load rockets from `ClientStateManager`.
     public class DivertLoading
     {
         [HarmonyPatch(typeof(SavingCache), nameof(SavingCache.Preload_WorldPersistent))]
@@ -54,6 +58,68 @@ namespace MultiplayerSFS.Mod.Patches
                         };
                         worldPersistent.thread.Start();
                     }
+                    return false;
+                }
+                return true;
+            }
+        }
+
+        [HarmonyPatch(typeof(GameManager), "LoadPersistentAndLaunch")]
+        public class GameManager_LoadPersistentAndLaunch
+        {
+            public static bool Prefix(GameManager __instance)
+            {
+                if (Patches.multiplayerEnabled.Value)
+                {
+                    SavingCache.main.Preload_WorldPersistent(true);
+                    SavingCache.main.FieldRef<SavingCache.Data<WorldSave>>("worldPersistent") = null;
+                    
+                    AccessTools.Method(typeof(GameManager), "ClearWorld").Invoke(__instance, null);
+                    CareerState.main.SetState(new WorldSave.CareerState());
+                    
+                    // TODO: May be able to remove some of the code related to branches, challenges, etc.
+                    LogManager.main.branches = new Dictionary<int, Branch>();
+                    LogManager.main.completeLogs = new HashSet<LogId>();
+                    LogManager.main.completeChallenges = new HashSet<string>();
+                    
+                    WorldTime.main.worldTime = NetworkingManager.stateManager.worldTime;
+                    WorldTime.main.SetTimewarpIndex_ForLoad(0);
+                    WorldView.main.SetViewLocation(Base.planetLoader.spaceCenter.LaunchPadLocation);
+                    WorldView.main.viewDistance.Value = 32f;
+
+                    foreach (int id in NetworkingManager.stateManager.rockets.Keys)
+                    {
+                        NetworkingManager.stateManager.LoadRocket(id);
+                    }
+
+                    AstronautState.main.state = new WorldSave.Astronauts();
+                    // // Astronauts loading
+                    
+                    Map.manager.mapMode.Value = false;
+                    Map.view.view.target.Value = Base.planetLoader.spaceCenter.Planet.mapPlanet;
+                    Map.view.view.position.Value = Base.planetLoader.spaceCenter.LaunchPadLocation.position;
+                    Map.view.view.distance.Value = Base.planetLoader.spaceCenter.LaunchPadLocation.position.y * 0.65;
+                    Map.navigation.SetTarget(Map.view.view.target.Value);
+                   
+                    PlayerController.main.player.Value = null;
+                    PlayerController.main.cameraDistance.Value = 32f;
+                    
+                    if (__instance.environment.environments != null)
+                    {
+                        Environment[] environments = __instance.environment.environments;
+                        foreach (Environment environment in environments)
+                        {
+                            environment.terrain?.LoadFully();
+                        }
+                    }
+                    LogManager.main.ClearBranches();
+
+                    if (SavingCache.main.TryLoadBuildPersistent(MsgDrawer.main, out var buildPersistent, eraseCache: false))
+                    {
+                        RocketManager.SpawnBlueprint(buildPersistent);
+                    }
+                    GameCamerasManager.main.InstantlyRotateCamera();
+
                     return false;
                 }
                 return true;
@@ -119,8 +185,32 @@ namespace MultiplayerSFS.Mod.Patches
 
     public class DisableWorldSaving
     {
+        [HarmonyPatch(typeof(SavingCache), nameof(SavingCache.UpdateWorldPersistent))]
+        public class SavingCache_UpdateWorldPersistent
+        {
+            public static bool Prefix()
+            {
+                if (Patches.multiplayerEnabled.Value)
+                {
+                    // ? This is only called when exiting to the hub or build scenes, since its use in `GameManager.Update` is patched out.
+                    NetworkingManager.stateManager.ClearLocal();
+                    return false;
+                }
+                return true;
+            }
+        }
+
         [HarmonyPatch(typeof(SavingCache), nameof(SavingCache.SaveWorldPersistent))]
         public class SavingCache_SaveWorldPersistent
+        {
+            public static bool Prefix()
+            {
+                return !Patches.multiplayerEnabled.Value;
+            }
+        }
+
+        [HarmonyPatch(typeof(GameManager), "Update")]
+        public class GameManager_Update
         {
             public static bool Prefix()
             {
@@ -168,6 +258,35 @@ namespace MultiplayerSFS.Mod.Patches
             {
                 __instance.FieldRef<Button>("resumeGameButton")
                     .SetEnabled(!Patches.multiplayerEnabled.Value && Base.worldBase.paths.CanResumeGame());
+            }
+        }
+
+        [HarmonyPatch(typeof(HubManager), nameof(HubManager.OpenMenu))]
+        public class HubManager_OpenMenu
+        {
+            public static bool Prefix(HubManager __instance)
+            {
+                if (Patches.multiplayerEnabled.Value)
+                {
+                    ResourcesLoader.ButtonIcons buttonIcons = ResourcesLoader.main.buttonIcons;
+                    MenuGenerator.OpenMenu
+                    (
+                        CancelButton.Close,
+                        CloseMode.Current,
+
+                        new SizeSyncerBuilder(out var carrier).HorizontalMode(SizeMode.MaxChildSize),
+                        // // Cheats
+                        ButtonBuilder.CreateIconButton(carrier, buttonIcons.settings, () => Loc.main.Open_Settings_Button, Menu.settings.Open, CloseMode.None),
+                        ElementGenerator.VerticalSpace(10),
+                        // // Resume game
+                        ButtonBuilder.CreateIconButton(carrier, buttonIcons.exit, () => Loc.main.Exit_To_Main_Menu, () => {
+                            NetworkingManager.Shutdown();
+                            __instance.ExitToMainMenu();
+                        }, CloseMode.None)
+                    );
+                    return false;
+                }
+                return true;
             }
         }
 
@@ -228,7 +347,6 @@ namespace MultiplayerSFS.Mod.Patches
                         new SizeSyncerBuilder(out var carrier).HorizontalMode(SizeMode.MaxChildSize),
                         new SizeSyncerBuilder(out var carrier2).HorizontalMode(SizeMode.MaxChildSize),
                         // // Quicksaves & reverting
-                        // list.Add(ElementGenerator.VerticalSpace(25));
                         ButtonBuilder.CreateIconButton(carrier2, buttonIcons.newRocket, () => Loc.main.Build_New_Rocket, __instance.ExitToBuild, CloseMode.None),
                         // // Clear debris
                         ElementGenerator.VerticalSpace(10),
@@ -289,7 +407,6 @@ namespace MultiplayerSFS.Mod.Patches
             {
                 if (Patches.multiplayerEnabled.Value)
                 {
-                    // MsgDrawer.main.Log("Reverting is disabled in multiplayer.");
                     __result = false;
                     return false;
                 }
@@ -357,6 +474,62 @@ namespace MultiplayerSFS.Mod.Patches
                     return false;
                 }
                 return true;
+            }
+        }
+    }
+
+    public class DisablePausing
+    {
+        [HarmonyPatch(typeof(ScreenManager), "Awake")]
+        public class ScreenManager_Awake
+        {
+            public static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions)
+            {
+                List<CodeInstruction> codes = instructions.ToList();
+                for (int i = 0; i < codes.Count; i++)
+                {
+                    // ? Removes `Time.timeScale = 0f;` for its multiplayer replacement in `Postfix`.
+                    if (codes[i].Calls(AccessTools.PropertySetter(typeof(Time), nameof(Time.timeScale))))
+                    {
+                        codes[i - 1].opcode = OpCodes.Nop;
+                        codes.RemoveAt(i);
+                        break;
+                    }
+                }
+                return codes;
+            }
+
+            public static void Postfix(ScreenManager __instance)
+            {
+                if (!Patches.multiplayerEnabled.Value && !__instance.selfInitialize)
+                    Time.timeScale = 0f;
+            }
+        }
+
+        [HarmonyPatch(typeof(ScreenManager), nameof(ScreenManager.OpenScreen))]
+        public class ScreenManager_OpenScreen
+        {
+            public static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions)
+            {
+                List<CodeInstruction> codes = instructions.ToList();
+                for (int i = 0; i < codes.Count; i++)
+                {
+                    // ? Removes `Time.timeScale = (CurrentScreen.PauseWhileOpen ? 0f : ((WorldTime.main != null) ? WorldTime.main.TimeScale : 1f));` for its multiplayer replacement in `Postfix`.
+                    if (codes[i].Calls(AccessTools.PropertySetter(typeof(Time), nameof(Time.timeScale))))
+                    {
+                        codes.RemoveRange(i - 14, 15);
+                        break;
+                    }
+                }
+                return codes;
+            }
+
+            public static void Postfix(ScreenManager __instance)
+            {
+                if (!Patches.multiplayerEnabled.Value)
+                {
+                    Time.timeScale = __instance.CurrentScreen.PauseWhileOpen ? 0f : ((WorldTime.main != null) ? WorldTime.main.TimeScale : 1f);
+                }
             }
         }
     }

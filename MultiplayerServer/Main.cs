@@ -1,19 +1,17 @@
 using System;
 using System.IO;
-using System.Linq;
 using System.Threading;
+using System.Threading.Tasks;
 using System.Collections.Generic;
 using Newtonsoft.Json;
 using Lidgren.Network;
-using MultiplayerSFS.Common;
 using MultiplayerSFS.Common.Packets;
-using System.Threading.Tasks;
 
 namespace MultiplayerSFS.Server
 {
     static class Program
     {
-        static string password;
+        static ServerConfig serverConfig;
         static ServerWorldState worldState;
         static Dictionary<string, ConnectedPlayer> connectedPlayers;
         static NetPeerConfiguration netConfig;
@@ -22,26 +20,37 @@ namespace MultiplayerSFS.Server
 
         static void Main()
         {
-            string path = "server_config.json";
-            if (!ServerConfig.TryLoad(path, out ServerConfig config))
+            string configPath = "server_config.json";
+            if (!ServerConfig.TryLoad(configPath, out serverConfig))
             {
-                // File.Create(path).Dispose();
-                // string new_json = JsonConvert.SerializeObject(new ServerConfig(), Formatting.Indented);
-                // File.WriteAllText(path, new_json);
-                // Console.WriteLine("Main(): '{0}' created, edit to change server settings (password, port, etc).", path);
+                File.Create(configPath).Dispose();
+                string new_json = JsonConvert.SerializeObject(new ServerConfig(), Formatting.Indented);
+                File.WriteAllText(configPath, new_json);
+                
+                Console.ForegroundColor = ConsoleColor.Yellow;
+                Console.WriteLine("Main(): '{0}' created, edit to change server settings (world save, password, etc).", configPath);
+                Console.ResetColor();
             }
 
-            worldState = new ServerWorldState();
+            try
+            {
+                worldState = new ServerWorldState(serverConfig.worldSaveFolder);
+            }
+            catch (Exception e)
+            {
+                Console.ForegroundColor = ConsoleColor.Red;
+                Console.WriteLine("ERROR: Was unable to load world save, server state will not be saved! '{0}'", e.InnerException.Message);
+                Console.ResetColor();
+                worldState = new ServerWorldState();
+            }
 
-            password = config.password;
             connectedPlayers = new Dictionary<string, ConnectedPlayer>();
-
             netConfig = new NetPeerConfiguration("MultiplayerSFS")
             {
-                Port = config.port,
+                Port = serverConfig.port,
                 AutoExpandMTU = true,
                 AcceptIncomingConnections = true,
-                MaximumConnections = config.maxPlayers,
+                MaximumConnections = serverConfig.maxPlayers,
             };
             netConfig.EnableMessageType(NetIncomingMessageType.ConnectionApproval);
             // netConfig.EnableMessageType(NetIncomingMessageType.ConnectionLatencyUpdated);
@@ -97,7 +106,6 @@ namespace MultiplayerSFS.Server
 
                     // TODO: Send update messages (player movement, chat, etc) to players.
 
-
                     RemoveDisconnectedPlayers();
                 }
                 catch (Exception e)
@@ -116,9 +124,11 @@ namespace MultiplayerSFS.Server
 
                 if (msg.DeserializeMessageToPacket() is JoinRequestPacket joinRequest)
                 {
-                    Console.WriteLine("CheckJoinRequest(): Valid join request packet recieved.");
-
-                    if (joinRequest.password != password)
+                    if (server.ConnectionsCount >= serverConfig.maxPlayers)
+                    {
+                        sender.Deny("Server full..");
+                    }
+                    if (joinRequest.password != serverConfig.password)
                     {
                         sender.Deny("Password is incorrect...");
                     }
@@ -154,7 +164,8 @@ namespace MultiplayerSFS.Server
                 }
                 else
                 {
-                    Console.WriteLine("CheckJoinRequest(): Recieved an incorrect packet type.");
+                    sender.Deny("Incorrect packet...");
+                    throw new Exception("Recieved an incorrect packet type.");
                 }
             }
             catch (Exception e)
@@ -195,7 +206,8 @@ namespace MultiplayerSFS.Server
     {
         public string password = "";
         public int port = 9807;
-        public int maxPlayers = 16;
+        public int maxPlayers = 8;
+        public string worldSaveFolder = "";
 
         public static bool TryLoad(string path, out ServerConfig config)
         {

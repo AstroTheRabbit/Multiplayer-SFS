@@ -3,7 +3,7 @@
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFramework>net4.8</TargetFramework>
-    <PublishSingleFile>true</PublishSingleFile>
+    <!-- <PublishSingleFile>true</PublishSingleFile> -->
   </PropertyGroup>
 
   <ItemGroup>
@@ -11,6 +11,9 @@
     <PackageReference Include="Lidgren.Network" Version="1.0.2" />
     <Reference Include="Assembly-CSharp">
       <HintPath>../MultiplayerMod/Dependencies/Assembly-CSharp.dll</HintPath>
+    </Reference>
+    <Reference Include="Assembly-CSharp-firstpass">
+      <HintPath>../MultiplayerMod/Dependencies/Assembly-CSharp-firstpass.dll</HintPath>
     </Reference>
     <Reference Include="UnityEngine">
       <HintPath>../MultiplayerMod/Dependencies/UnityEngine.dll</HintPath>

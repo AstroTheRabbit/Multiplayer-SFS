@@ -1,7 +1,9 @@
-using System;
-using System.Numerics;
 using System.Collections.Generic;
+using UnityEngine;
 using Lidgren.Network;
+using SFS.Parts;
+using SFS.World;
+using SFS.WorldBase;
 using SFS.Parts.Modules;
 using MultiplayerSFS.Common.Packets;
 
@@ -107,6 +109,11 @@ namespace MultiplayerSFS.Common
             msg.Write(rotation);
             msg.Write(angularVelocity);
         }
+
+        public Location ToLocation()
+        {
+            return new Location(WorldTime.main.worldTime, planet.GetPlanet(), position, velocity);
+        }
     }
 
     public class PartState : IPacket
@@ -151,7 +158,7 @@ namespace MultiplayerSFS.Common
         public void Serialize(NetOutgoingMessage msg)
         {
             msg.Write(name);
-            msg.Write(position.X); msg.Write(position.Y);
+            msg.Write(position.x); msg.Write(position.y);
             msg.Write(orientation.x); msg.Write(orientation.y); msg.Write(orientation.z);
             msg.Write(temperature);
 
@@ -175,6 +182,11 @@ namespace MultiplayerSFS.Common
                 msg.Write(kvp.Key);
                 msg.Write(kvp.Value);
             }
+        }
+
+        public PartSave ToPartSave()
+        {
+            return new PartSave(name, position, orientation, numberVariables, toggleVariables, textVariables);
         }
     }
 
@@ -200,17 +212,17 @@ namespace MultiplayerSFS.Common
     public class StageState : IPacket
     {
         public int stageID;
-        public List<int> parts;
+        public List<int> partIDs;
 
         public void Deserialize(NetIncomingMessage msg)
         {
             stageID = msg.ReadInt32();
             
             int partsLength = msg.ReadInt32();
-            parts = new List<int>(partsLength);
+            partIDs = new List<int>(partsLength);
             for (int i = 0; i < partsLength; i++)
             {
-                parts.Add(msg.ReadInt32());
+                partIDs.Add(msg.ReadInt32());
             }
         }
 
@@ -218,8 +230,8 @@ namespace MultiplayerSFS.Common
         {
             msg.Write(stageID);
             
-            msg.Write(parts.Count);
-            foreach (int part in parts)
+            msg.Write(partIDs.Count);
+            foreach (int part in partIDs)
             {
                 msg.Write(part);
             }

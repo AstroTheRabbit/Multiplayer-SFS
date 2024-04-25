@@ -202,5 +202,12 @@ namespace MultiplayerSFS.Mod.Networking
         {
             // TODO
         }
+
+        public static void Shutdown()
+        {
+            stateManager = null;
+            listenerThread?.Abort();
+            client.Disconnect("PlayerDisconnect");
+        }
     }
 }
