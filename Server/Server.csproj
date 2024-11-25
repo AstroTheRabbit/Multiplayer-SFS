@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net4.8</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Lidgren.Network" Version="1.0.2" />
+    <Compile Include="../Common/*.cs" />
+
+    <Reference Include="../../Other Files/Game Dependencies/*">
+      <HintPath>../../Other Files/Game Dependencies/*.dll</HintPath>
+    </Reference>
+    <!-- <Reference Include="UITools">
+      <HintPath>../../Other Files/Mods Folder/UITools/UITools.dll</HintPath>
+    </Reference> -->
+
+    <!-- ? The following DLLs cause warnings on build -->
+    <Reference Remove="**/System.IO.Compression.dll" />
+    <Reference Remove="**/System.Net.Http.dll" />
+    <Reference Remove="**/Firebase.*.dll" />
+    <Reference Remove="**/Unity.Compat.dll" />
+    <Reference Remove="**/Unity.Tasks.dll" />
+  </ItemGroup>
+</Project>
