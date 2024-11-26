@@ -5,23 +5,23 @@ using SFS.IO;
 using SFS.Parts;
 using SFS.World;
 
-namespace MultiplayerSFS.Server
+namespace MultiplayerSFS.Common
 {
-    public static class WorldState
+    public class WorldState
     {
         public static Random idGenerator = new Random();
-        public static FolderPath savePath = null;
-        public static double worldTime = 0;
-        public static Dictionary<int, RocketState> rockets = new Dictionary<int, RocketState>();
-        public static Dictionary<int, PartState> parts = new Dictionary<int, PartState>();
+        public FolderPath savePath = null;
+        public double worldTime = 0;
+        public Dictionary<int, RocketState> rockets = new Dictionary<int, RocketState>();
+        public  Dictionary<int, PartState> parts = new Dictionary<int, PartState>();
 
-        public static void LoadFromSave(string path)
+        public WorldState(string path)
         {
             savePath = new FolderPath(path);
             // TODO: Loading worlds from saves.
         }
 
-        public static int AddRocket(RocketState state)
+        public int AddRocket(RocketState state)
         {
             int id;
             do
@@ -33,7 +33,7 @@ namespace MultiplayerSFS.Server
             return id;
         }
 
-        public static int AddPart(PartState state)
+        public int AddPart(PartState state)
         {
             int id;
             do
@@ -59,7 +59,7 @@ namespace MultiplayerSFS.Server
         public List<JointState> joints;
         public List<StageState> stages;
 
-        public RocketState(RocketSave save)
+        public RocketState(RocketSave save, WorldState world)
         {
             rocketName = save.rocketName;
             location = save.location;
@@ -75,7 +75,7 @@ namespace MultiplayerSFS.Server
             for (int i = 0; i < save.parts.Length; i++)
             {
                 PartState part = new PartState(save.parts[i]);
-                int id = WorldState.AddPart(part);
+                int id = world.AddPart(part);
                 partIndexToID.Add(i, id);
                 partIDs.Add(id);
             }

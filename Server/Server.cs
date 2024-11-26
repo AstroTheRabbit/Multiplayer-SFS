@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using Lidgren.Network;
+using MultiplayerSFS.Common;
 using MultiplayerSFS.Common.Packets;
 
 namespace MultiplayerSFS.Server
@@ -12,6 +13,7 @@ namespace MultiplayerSFS.Server
 		static Thread thread;
 		static NetServer server;
 		static ServerSettings settings;
+		static WorldState world;
 
 		static Dictionary<NetConnection, ConnectedPlayer> connectedPlayers;
 
@@ -24,7 +26,7 @@ namespace MultiplayerSFS.Server
 				MaximumConnections = settings.maxConnections,
             };
 
-			WorldState.LoadFromSave(settings.worldSavePath);
+			world = new WorldState(settings.worldSavePath);
 
             server = new NetServer(npc);
 			server.Start();
