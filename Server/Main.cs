@@ -1,13 +1,20 @@
-﻿using Lidgren.Network;
-using Multiplayer.Common;
+﻿using System;
 
-namespace Multiplayer.Server
+namespace MultiplayerSFS.Server
 {
-	public class Program
+    public class Program
 	{
 		public static void Main()
 		{
-			
+			try
+			{
+				// TODO: Settings loading.
+				Server.Initialize(new ServerSettings());
+			}
+			catch (Exception e)
+			{
+				Logger.Error(e);
+			}
 		}
 	}
 }

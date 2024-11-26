@@ -1,6 +1,6 @@
 
 
-namespace Multiplayer.Mod
+namespace MultiplayerSFS.Mod
 {
     
 }
