@@ -5,10 +5,18 @@ namespace MultiplayerSFS.Server
     public static class Logger
     {
         static string Date() => DateTime.Now.ToString();
-        
-        public static void Info(string msg)
+
+        public static void Debug(object obj)
         {
-            Console.ForegroundColor = ConsoleColor.Green;
+            Console.ForegroundColor = ConsoleColor.Magenta;
+            Console.WriteLine("[{0}] [DEBUG]: {1}", Date(), obj);
+            Console.ResetColor();
+        }
+        
+        public static void Info(string msg, bool important = false)
+        {
+            if (important)
+                Console.ForegroundColor = ConsoleColor.Green;
             Console.WriteLine("[{0}] [INFO]: {1}", Date(), msg);
             Console.ResetColor();
         }
@@ -16,7 +24,7 @@ namespace MultiplayerSFS.Server
         public static void Warning(string msg)
         {
             Console.ForegroundColor = ConsoleColor.Yellow;
-            Console.WriteLine("[{0}] [INFO]: {1}", Date(), msg);
+            Console.WriteLine("[{0}] [WARN]: {1}", Date(), msg);
             Console.ResetColor();
         }
 
