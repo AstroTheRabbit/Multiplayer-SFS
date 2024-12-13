@@ -1,17 +1,11 @@
-﻿using System.IO;
-using System.Net;
-using System.Reflection;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using HarmonyLib;
 using UnityEngine;
-using UITools;
-using ModLoader;
 using ModLoader.Helpers;
 using SFS.IO;
 using SFS.UI;
 using SFS.Audio;
 using SFS.Translations;
-using MultiplayerSFS.Mod.GUI;
 
 namespace MultiplayerSFS.Mod
 {
@@ -46,12 +40,13 @@ namespace MultiplayerSFS.Mod
             AddMultiplayerButton();
             SceneHelper.OnHomeSceneLoaded += AddMultiplayerButton;
             buildPersistentFolder = new FolderPath(ModFolder).Extend(".BlueprintPersistent");
-            Patches.Patches.multiplayerEnabled.OnChange += (bool value) => { Application.runInBackground = value; };
+            Patches.multiplayerEnabled.OnChange += (bool value) => { Application.runInBackground = value; };
         }
 
         public static void AddMultiplayerButton()
         {
-            Patches.Patches.multiplayerEnabled.Value = false;
+            Patches.multiplayerEnabled.Value = false;
+            Application.quitting += () => ClientManager.client?.Shutdown("Application quitting");
             
             Transform buttons = GameObject.Find("Buttons").transform;
             GameObject playButton = GameObject.Find("Play Button");

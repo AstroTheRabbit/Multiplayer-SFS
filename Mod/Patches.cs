@@ -1,6 +1,6 @@
 using System.Linq;
 using System.Threading;
-using System.Reflection;
+using System.Threading.Tasks;
 using System.Reflection.Emit;
 using System.Collections.Generic;
 using UnityEngine;
@@ -9,7 +9,6 @@ using HarmonyLib;
 using SFS;
 using SFS.IO;
 using SFS.UI;
-using SFS.Logs;
 using SFS.Input;
 using SFS.World;
 using SFS.Stats;
@@ -19,9 +18,10 @@ using SFS.WorldBase;
 using SFS.Variables;
 using SFS.World.Maps;
 using SFS.Translations;
-using MultiplayerSFS.Mod.Networking;
+using MultiplayerSFS.Common;
+using ModLoader.Helpers;
 
-namespace MultiplayerSFS.Mod.Patches
+namespace MultiplayerSFS.Mod
 {
     public static class Patches
     {
@@ -76,18 +76,16 @@ namespace MultiplayerSFS.Mod.Patches
                     
                     AccessTools.Method(typeof(GameManager), "ClearWorld").Invoke(__instance, null);
                     CareerState.main.SetState(new WorldSave.CareerState());
-                    
-                    // TODO: May be able to remove some of the code related to branches, challenges, etc.
-                    LogManager.main.branches = new Dictionary<int, Branch>();
-                    LogManager.main.completeLogs = new HashSet<LogId>();
-                    LogManager.main.completeChallenges = new HashSet<string>();
+
+                    // // Branches, challenges, logs
+                    // TODO: Fix up errors related to branches, etc
                     
                     WorldTime.main.worldTime = ClientManager.world.worldTime;
                     WorldTime.main.SetTimewarpIndex_ForLoad(0);
                     WorldView.main.SetViewLocation(Base.planetLoader.spaceCenter.LaunchPadLocation);
                     WorldView.main.viewDistance.Value = 32f;
 
-                    ClientManager.SpawnRockets();
+                    LocalManager.OnLoadWorld();
 
                     AstronautState.main.state = new WorldSave.Astronauts();
                     // // Astronauts loading
@@ -111,7 +109,7 @@ namespace MultiplayerSFS.Mod.Patches
                     }
                     LogManager.main.ClearBranches();
 
-                    if (SavingCache.main.TryLoadBuildPersistent(MsgDrawer.main, out var buildPersistent, eraseCache: false))
+                    if (SavingCache.main.TryLoadBuildPersistent(MsgDrawer.main, out Blueprint buildPersistent, eraseCache: false))
                     {
                         RocketManager.SpawnBlueprint(buildPersistent);
                     }
@@ -190,7 +188,9 @@ namespace MultiplayerSFS.Mod.Patches
                 if (Patches.multiplayerEnabled.Value)
                 {
                     // ? This is only called when exiting to the hub or build scenes, since its use in `GameManager.Update` is patched out.
-                    ClientManager.ClearLocals();
+                    LocalManager.syncedRockets = new Dictionary<int, LocalRocket>();
+                    LocalManager.unsyncedRockets = new HashSet<int>();
+                    LocalManager.unsyncedToControl = -1;
                     return false;
                 }
                 return true;
@@ -277,7 +277,7 @@ namespace MultiplayerSFS.Mod.Patches
                         ElementGenerator.VerticalSpace(10),
                         // // Resume game
                         ButtonBuilder.CreateIconButton(carrier, buttonIcons.exit, () => Loc.main.Exit_To_Main_Menu, () => {
-                            ClientManager.Disconnect();
+                            ClientManager.client?.Shutdown("Left world");
                             __instance.ExitToMainMenu();
                         }, CloseMode.None)
                     );
@@ -530,4 +530,126 @@ namespace MultiplayerSFS.Mod.Patches
             }
         }
     }
+
+    /// <summary>
+    /// Patches related to syncing world events (like players switching rockets) with the multiplayer server.
+    /// </summary>
+    public class WorldEventSyncing
+    {
+        /// <summary>
+        /// Prevents a player from switching to a rocket that is already controlled by another player in multiplayer.
+        /// </summary>
+        [HarmonyPatch(typeof(PlayerController), "Start")]
+        public class PlayerController_Start
+        {
+            public static void Postfix(PlayerController __instance)
+            {
+                __instance.player.Filter = CheckSwitchRocket;
+            }
+
+            static Player CheckSwitchRocket(Player oldPlayer, Player newPlayer)
+            {
+                if (Patches.multiplayerEnabled.Value)
+                {
+                    if (newPlayer is Rocket rocket)
+                    {
+                        int rocketId = LocalManager.GetLocalRocketID(rocket);
+                        if (LocalManager.players.Values.Any((LocalPlayer player) => player.currentRocket == rocketId))
+                        {
+                            // * Cannot switch to a rocket that's already controlled by another player.
+                            return oldPlayer;
+                        }
+                        else
+                        {
+                            ClientManager.SendPacket
+                            (
+                                new Packet_UpdatePlayerControl()
+                                {
+                                    PlayerId = ClientManager.playerId,
+                                    RocketId = rocketId,
+                                }
+                            );
+                            return newPlayer;
+                        }
+                    }
+                    else if (newPlayer != null)
+                    {
+                        Debug.LogError("Unsupported `Player` type in multiplayer!");
+                        return oldPlayer;
+                    }
+                    else
+                    {
+                        ClientManager.SendPacket
+                        (
+                            new Packet_UpdatePlayerControl()
+                            {
+                                PlayerId = ClientManager.playerId,
+                                RocketId = -1,
+                            }
+                        );
+                        return newPlayer;
+                    }
+                }
+                else
+                {
+                    return newPlayer;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Syncs the newly created rockets of a launched blueprint with the multiplayer server.
+        /// </summary>
+        [HarmonyPatch(typeof(RocketManager), nameof(RocketManager.SpawnBlueprint))]
+        public static class RocketManager_SpawnBlueprint
+        {
+            public static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions)
+            {
+                foreach (var code in instructions)
+                {
+                    if (code.opcode == OpCodes.Ret)
+                    {
+                        yield return new CodeInstruction(OpCodes.Ldloc_3);
+                        yield return CodeInstruction.Call(typeof(RocketManager_SpawnBlueprint), nameof(SyncBlueprint));
+                    }
+                    yield return code;
+                }
+            }
+
+            public static void SyncBlueprint(Rocket[] rockets)
+            {
+                if (Patches.multiplayerEnabled.Value)
+                {
+                    Debug.Log(rockets.Length);
+                    if (rockets.Length == 0)
+                    {
+                        SceneHelper.OnBuildSceneLoaded += AlertEmptyBuild;
+                        Base.sceneLoader.LoadBuildScene(false);
+                    }
+
+                    Menu.loading.Open("Sending launch request to server...");
+                    foreach (Rocket rocket in rockets)
+                    {
+                        RocketState state = new RocketState(new RocketSave(rocket));
+                        int localId = LocalManager.unsyncedRockets.InsertNew();
+                        if (rocket == PlayerController.main.player.Value || LocalManager.unsyncedToControl == -1)
+                            LocalManager.unsyncedToControl = localId;
+
+                        ClientManager.SendPacket(new Packet_CreateRocket() { LocalId = localId, Rocket = state });
+                        RocketManager.DestroyRocket(rocket, DestructionReason.Intentional);
+                    }
+
+                    Menu.loading.text.text = "Waiting for server response...";
+                    // * Loading screen is later closed in `LocalManager.CreateRocket`.
+                }
+
+                void AlertEmptyBuild()
+                {
+                    MsgDrawer.main.Log("Cannot launch an empty blueprint in multiplayer!");
+                    SceneHelper.OnBuildSceneLoaded -= AlertEmptyBuild;
+                }
+            }
+        }
+    }
 }
+

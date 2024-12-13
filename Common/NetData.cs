@@ -5,7 +5,7 @@ using SFS.Parts.Modules;
 using SFS.World;
 using UnityEngine;
 
-namespace MultiplayerSFS.Common.Networking
+namespace MultiplayerSFS.Common
 {
     public interface INetData
     {
@@ -110,6 +110,10 @@ namespace MultiplayerSFS.Common.Networking
 
         public static void Write(this NetOutgoingMessage msg, BurnMark.BurnSave burnSave)
         {
+            msg.Write(burnSave == null);
+            if (burnSave == null)
+                return;
+                
             msg.Write(burnSave.angle);
             msg.Write(burnSave.intensity);
             msg.Write(burnSave.x);
@@ -118,6 +122,9 @@ namespace MultiplayerSFS.Common.Networking
         }
         public static BurnMark.BurnSave ReadBurnSave(this NetIncomingMessage msg)
         {
+            if (msg.ReadBoolean())
+                return null;
+            
             return new BurnMark.BurnSave()
             {
                 angle = msg.ReadFloat(),

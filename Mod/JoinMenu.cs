@@ -5,10 +5,9 @@ using UnityEngine;
 using SFS.UI;
 using SFS.Input;
 using SFS.UI.ModGUI;
-using MultiplayerSFS.Mod.Networking;
 using Type = SFS.UI.ModGUI.Type;
 
-namespace MultiplayerSFS.Mod.GUI
+namespace MultiplayerSFS.Mod
 {
     public class JoinInfo
     {
@@ -36,7 +35,7 @@ namespace MultiplayerSFS.Mod.GUI
         readonly CancellationTokenSource connectCancelToken = new CancellationTokenSource();
 
         public static void OpenMenu() {
-            windowHolder = Builder.CreateHolder(Builder.SceneToAttach.CurrentScene, "Multiplayer SFS - Join Menu Holder");
+            windowHolder = Builder.CreateHolder(Builder.SceneToAttach.CurrentScene, "MultiplayerSFS - Join Menu Holder");
             main = windowHolder.AddComponent<JoinMenu>();
             main.OnOpen();
         }
@@ -47,7 +46,7 @@ namespace MultiplayerSFS.Mod.GUI
             {
                 ScreenManager.main.OpenScreen(() => this);
                 windowHolder.SetActive(true);
-                Patches.Patches.multiplayerEnabled.Value = true;
+                Patches.multiplayerEnabled.Value = true;
                 window = Builder.CreateWindow(
                     windowHolder.transform,
                     windowID,
@@ -68,7 +67,7 @@ namespace MultiplayerSFS.Mod.GUI
         {
             if (ScreenManager.main.CurrentScreen == this && windowHolder != null)
             {
-                Patches.Patches.multiplayerEnabled.Value = false;
+                Patches.multiplayerEnabled.Value = false;
                 ScreenManager.main.CloseCurrent();
                 windowHolder.SetActive(false);
             }

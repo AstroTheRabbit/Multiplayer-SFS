@@ -8,33 +8,32 @@ using UnityEngine;
 using Lidgren.Network;
 using SFS;
 using SFS.UI;
-using SFS.Parts;
 using SFS.World;
 using SFS.WorldBase;
 using MultiplayerSFS.Common;
-using MultiplayerSFS.Mod.GUI;
-using MultiplayerSFS.Common.Networking;
 
-namespace MultiplayerSFS.Mod.Networking
+namespace MultiplayerSFS.Mod
 {
     public static class ClientManager
     {
-        public static Thread thread;
         public static NetClient client;
+        public static int playerId;
 
         public static WorldState world;
-        public static Dictionary<int, Rocket> localRockets;
-        public static Dictionary<int, Part> localParts;
 
         public static async Task TryConnect(JoinInfo info, CancellationToken token)
         {
             if (client != null && client.Status != NetPeerStatus.NotRunning)
-                client.Shutdown("Reattempting join request.");
+                client.Shutdown("Re-attempting join request");
 
-            NetPeerConfiguration npc = new NetPeerConfiguration("multiplayersfs");
-			npc.EnableMessageType(NetIncomingMessageType.StatusChanged);
+            NetPeerConfiguration npc = new NetPeerConfiguration("multiplayersfs")
+            {
+                ConnectionTimeout = 10,
+            };
+            npc.EnableMessageType(NetIncomingMessageType.StatusChanged);
 			npc.EnableMessageType(NetIncomingMessageType.UnconnectedData);
-			npc.EnableMessageType(NetIncomingMessageType.ConnectionLatencyUpdated);
+			npc.EnableMessageType(NetIncomingMessageType.VerboseDebugMessage);
+			// npc.EnableMessageType(NetIncomingMessageType.ConnectionLatencyUpdated);
             
             client = new NetClient(npc);
             client.Start();
@@ -42,7 +41,7 @@ namespace MultiplayerSFS.Mod.Networking
             NetOutgoingMessage hail = client.CreateMessage();
             hail.Write
             (
-                new Client_JoinRequest()
+                new Packet_JoinRequest()
                 {
                     Username = info.username,
                     Password = info.password
@@ -51,7 +50,7 @@ namespace MultiplayerSFS.Mod.Networking
             client.Connect(new IPEndPoint(info.address, info.port), hail);
 
             Menu.loading.Open("Waiting for server response...");
-            string denialReason = "Unknown disconnect error...";
+            string denialReason = "Unable to connect to server...";
             while (true)
             {
                 NetIncomingMessage msg;
@@ -105,18 +104,20 @@ namespace MultiplayerSFS.Mod.Networking
         {
             Menu.loading.Open("Loading multiplayer world...");
 
-            ClearLocals();
-            Server_ServerInfo serverInfo = client.ServerConnection.RemoteHailMessage.Read<Server_ServerInfo>();
+            LocalManager.Initialize();
+            
+            Packet_JoinResponse response = client.ServerConnection.RemoteHailMessage.Read<Packet_JoinResponse>();
+            playerId = response.PlayerId;
+            
             world = new WorldState
             {
-                worldTime = serverInfo.WorldTime,
-                difficulty = serverInfo.Difficulty,
-                rockets = serverInfo.Rockets,
+                worldTime = response.WorldTime,
+                difficulty = response.Difficulty,
             };
 
             WorldSettings settings = new WorldSettings
             (
-                new SolarSystemReference(null),
+                new SolarSystemReference(""),
                 new Difficulty() { difficulty = world.difficulty },
                 new WorldMode(WorldMode.Mode.Sandbox) { allowQuicksaves = false },
                 new WorldPlaytime(),
@@ -140,7 +141,7 @@ namespace MultiplayerSFS.Mod.Networking
             NetIncomingMessage msg;
             while ((msg = client.ReadMessage()) != null)
             {
-                Debug.Log($"Recieved a message!!! Type is {msg.MessageType}.");
+                // Debug.Log("Recieved message...");
                 switch (msg.MessageType)
                 {
                     case NetIncomingMessageType.Error:
@@ -159,38 +160,184 @@ namespace MultiplayerSFS.Mod.Networking
                     case NetIncomingMessageType.Data:
                         HandlePacket(msg);
                         break;
+                    case NetIncomingMessageType.StatusChanged:
+                        NetConnectionStatus status = (NetConnectionStatus) msg.ReadByte();
+                        if (status == NetConnectionStatus.Disconnected)
+                        {
+                            SceneLoader.ExitToMainMenu();
+                            client.Shutdown("Disconnected by server.");
+                        }
+                        break;
                     default:
                         Debug.LogWarning($"Unhandled message type ({msg.MessageType})!");
                         break;
                 }
+                client.Recycle(msg);
             }
         }
 
         public static void HandlePacket(NetIncomingMessage msg)
         {
-            // ! TODO
             PacketType packetType = (PacketType) msg.ReadByte();
+            Debug.Log($"Recieved packet of type {packetType}.");
             switch (packetType)
             {
+                // * Player/server Info Packets
+                case PacketType.PlayerConnected:
+                    OnPacket_PlayerConnected(msg);
+                    break;
+                case PacketType.PlayerDisconnected:
+                    OnPacket_PlayerDisconnected(msg);
+                    break;
+                case PacketType.UpdatePlayerControl:
+                    OnPacket_UpdatePlayerControl(msg);
+                    break;
+                case PacketType.UpdatePlayerAuthority:
+                    OnPacket_UpdatePlayerAuthority(msg);
+                    break;
+
+                // * Rocket Packets
+                case PacketType.CreateRocket:
+                    OnPacket_CreateRocket(msg);
+                    break;
+                case PacketType.DestroyRocket:
+                    OnPacket_DestroyRocket(msg);
+                    break;
+                case PacketType.UpdateRocketLocation:
+                    OnPacket_UpdateRocketLocation(msg);
+                    break;
+                case PacketType.UpdateRocketControls:
+                    OnPacket_UpdateRocketControls(msg);
+                    break;
+
+                // // * Part packets
+                // case PacketType.ActivatePart: // ! TODO
+                //     OnPacket_ActivatePart(msg);
+                //     break;
+                // case PacketType.DestroyPart: // ! TODO
+                //     break;
+                
+                // // * Staging Packets
+                // case PacketType.CreateStage: // ! TODO
+                //     break;
+                // case PacketType.RemoveStage: // ! TODO
+                //     break;
+                // case PacketType.AddPartToStage: // ! TODO
+                //     break;
+                // case PacketType.RemovePartFromStage: // ! TODO
+                //     break;
+                // case PacketType.ReorderStage: // ! TODO
+                //     break;
+                
+                // * Invalid Packets
+                case PacketType.JoinResponse:
+                    Debug.LogWarning($"Recieved server info packet outside of connection attempt.");
+                    break;
+                case PacketType.JoinRequest:
+                    Debug.LogWarning($"Recieved packet (of type {packetType}) intended for the server.");
+                    break;
                 default:
-                    Debug.LogWarning($"Unhandled message type ({packetType})!");
+                    Debug.LogWarning($"Unhandled packet type ({packetType})!");
                     break;
             }
         }
 
-        public static void ClearLocals()
+        public static void SendPacket(Packet packet, NetDeliveryMethod method = NetDeliveryMethod.ReliableOrdered)
         {
-            localRockets = new Dictionary<int, Rocket>();
+            NetOutgoingMessage msg = client.CreateMessage();
+            msg.Write((byte) packet.Type);
+            msg.Write(packet);
+            client.SendMessage(msg, method);
+            // client.FlushSendQueue();
         }
 
-        public static void Disconnect()
+        static void OnPacket_PlayerConnected(NetIncomingMessage msg)
         {
-            client.Shutdown("Intentional disconnect.");
+            Packet_PlayerConnected packet = msg.Read<Packet_PlayerConnected>();
+            LocalManager.players.Add(packet.Id, new LocalPlayer(packet.Username));
         }
 
-        public static void SpawnRockets()
+        static void OnPacket_PlayerDisconnected(NetIncomingMessage msg)
         {
-            throw new NotImplementedException();
+            Packet_PlayerDisconnected packet = msg.Read<Packet_PlayerDisconnected>();
+            if (LocalManager.players.TryGetValue(packet.Id, out LocalPlayer player))
+            {
+                MsgDrawer.main.Log($"'{player.username}' disconnected.");
+                LocalManager.players.Remove(packet.Id);
+            }
         }
+
+        static void OnPacket_UpdatePlayerControl(NetIncomingMessage msg)
+        {
+            Packet_UpdatePlayerControl packet = msg.Read<Packet_UpdatePlayerControl>();
+            if (LocalManager.players.TryGetValue(packet.PlayerId, out LocalPlayer player))
+            {
+                player.currentRocket = packet.RocketId;
+            }
+            else
+            {
+                Debug.LogError("Missing player while trying to update controlled rocket!");
+            }
+
+        }
+        static void OnPacket_UpdatePlayerAuthority(NetIncomingMessage msg)
+        {
+            Packet_UpdatePlayerAuthority packet = msg.Read<Packet_UpdatePlayerAuthority>();
+            LocalManager.updateAuthority = packet.RocketIds;
+        }
+
+        static void OnPacket_CreateRocket(NetIncomingMessage msg)
+        {
+            Packet_CreateRocket packet = msg.Read<Packet_CreateRocket>();
+            LocalManager.CreateRocket(packet);
+        }
+
+        static void OnPacket_DestroyRocket(NetIncomingMessage msg)
+        {
+            Packet_DestroyRocket packet = msg.Read<Packet_DestroyRocket>();
+            LocalManager.DestroyRocket(packet.Id);
+        }
+
+        static void OnPacket_UpdateRocketLocation(NetIncomingMessage msg)
+        {
+            Packet_UpdateRocketLocation packet = msg.Read<Packet_UpdateRocketLocation>();
+            if (world.rockets.TryGetValue(packet.Id, out RocketState state))
+            {
+                state.location = packet.Location;
+                state.rotation = packet.Rotation;
+                state.angularVelocity = packet.AngularVelocity;
+                LocalManager.UpdateLocalRocketLocation(packet);
+            }
+            else
+            {
+                Debug.LogError($"Missing rocket from WorldState when trying to update location!");
+            }
+        }
+
+        static void OnPacket_UpdateRocketControls(NetIncomingMessage msg)
+        {
+            Packet_UpdateRocketControls packet = msg.Read<Packet_UpdateRocketControls>();
+            if (world.rockets.TryGetValue(packet.Id, out RocketState state))
+            {
+                state.throttleOn = packet.ThrottleOn;
+                state.throttlePercent = packet.ThrottlePercent;
+                state.RCS = packet.RCS;
+                LocalManager.UpdateLocalRocketControls(packet);
+            }
+            else
+            {
+                Debug.LogError($"Missing rocket from WorldState when trying to update controls!");
+            }
+        }
+
+        // ! TODO: Part activation - this is probably where nearly all of my problems regarding syncing etc will come from, since the vanilla part activation is quite complex (especially staging!)
+        // public static void OnPacket_ActivatePart(NetIncomingMessage msg)
+        // {
+        //     Packet_ActivatePart packet = msg.Read<Packet_ActivatePart>();
+        //     if (GameManager.main != null)
+        //     {
+        //         LocalManager.ActivateLocalPart(packet);
+        //     }
+        // }
     }
 }

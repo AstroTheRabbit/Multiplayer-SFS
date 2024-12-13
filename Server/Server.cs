@@ -1,23 +1,22 @@
 using System;
 using System.Net;
 using System.Linq;
-using System.Threading;
 using System.Collections.Generic;
 using Lidgren.Network;
-using SFS.IO;
 using MultiplayerSFS.Common;
-using MultiplayerSFS.Common.Networking;
+using System.Timers;
+using UnityEngine.Lumin;
 
 namespace MultiplayerSFS.Server
 {
     public static class Server
 	{
-		static Thread thread;
-		static NetServer server;
-		static ServerSettings settings;
-		static WorldState world;
+		public static NetServer server;
+		public static ServerSettings settings;
+		public static WorldState world;
+		public static Dictionary<IPEndPoint, ConnectedPlayer> connectedPlayers;
 
-		static Dictionary<IPEndPoint, ConnectedPlayer> connectedPlayers;
+		public static Timer resyncTimer;
 
 		public static void Initialize(ServerSettings settings)
 		{
@@ -30,27 +29,37 @@ namespace MultiplayerSFS.Server
 			npc.EnableMessageType(NetIncomingMessageType.StatusChanged);
 			npc.EnableMessageType(NetIncomingMessageType.ConnectionApproval);
 			npc.EnableMessageType(NetIncomingMessageType.ConnectionLatencyUpdated);
+			
+			npc.EnableMessageType(NetIncomingMessageType.VerboseDebugMessage);
 
 			world = new WorldState(settings.worldSavePath);
+			connectedPlayers = new Dictionary<IPEndPoint, ConnectedPlayer>();
+
+			if (settings.completeResyncPeriod > 0)
+			{
+				resyncTimer = new Timer(1000 * settings.completeResyncPeriod)
+				{
+					AutoReset = true,
+					Enabled = true,
+
+				};
+				resyncTimer.Elapsed += (object source, ElapsedEventArgs e) => OnCompleteResync();
+			}
 
             server = new NetServer(npc);
 			server.Start();
-
-			thread = new Thread(Run);
-			thread.Start();
-
-			connectedPlayers = new Dictionary<IPEndPoint, ConnectedPlayer>();
 		}
 
 		public static void Run()
 		{
 			try
 			{
-				Logger.Info($"Multiplayer SFS server started. Listening for connections on port {server.Port}...", true);
+				Logger.Info($"Multiplayer SFS server started, listening for connections on port {server.Port}...", true);
 
 				while (true)
 				{
 					Listen();
+					// UpdatePlayerAuthorities();
 				}
 			}
 			catch (Exception e)
@@ -64,16 +73,13 @@ namespace MultiplayerSFS.Server
 			NetIncomingMessage msg;
 			while ((msg = server.ReadMessage()) != null)
 			{
-				// string username = FindPlayer(msg.SenderConnection)?.username.FormatUsername();
-				// Logger.Info($"Recieved '{msg.MessageType}' packet from {username} @ {msg.SenderConnection.RemoteEndPoint}.");
-
 				switch (msg.MessageType)
 				{
 					case NetIncomingMessageType.StatusChanged:
 						OnStatusChanged(msg);
 						break;
 					case NetIncomingMessageType.ConnectionApproval:
-						OnPlayerConnect(msg);
+						OnPlayerConnectionAttempt(msg);
 						break;
 					case NetIncomingMessageType.Data:
 						OnIncomingPacket(msg);
@@ -81,7 +87,7 @@ namespace MultiplayerSFS.Server
 
 					case NetIncomingMessageType.DebugMessage:
 					case NetIncomingMessageType.VerboseDebugMessage:
-						Logger.Info($"Lidgren Debug - \"{msg.ReadString()}\".");
+						Logger.Debug($"Lidgren Debug - \"{msg.ReadString()}\".");
 						break;
 					case NetIncomingMessageType.WarningMessage:
 						Logger.Warning($"Lidgren Warning - \"{msg.ReadString()}\".");
@@ -108,54 +114,34 @@ namespace MultiplayerSFS.Server
 			}
 		}
 
-		public static ConnectedPlayer FindPlayer(NetConnection connection)
+		static ConnectedPlayer FindPlayer(NetConnection connection)
 		{
 			if (connectedPlayers.TryGetValue(connection.RemoteEndPoint, out ConnectedPlayer res))
 				return res;
 			return null;
 		}
 
-		public static ConnectedPlayer FindPlayer(string username, out NetConnection connection)
+		static string FormatUsername(this string username)
 		{
-			foreach (KeyValuePair<IPEndPoint, ConnectedPlayer> kvp in connectedPlayers)
-			{
-				if (kvp.Value.username == username)
-				{
-					connection = server.GetConnection(kvp.Key);
-					return kvp.Value;
-				}
-			}
-			connection = null;
-			return null;
-		}
+            return string.IsNullOrWhiteSpace(username) ? "???" : $"'{username}'";
+        }
 
-		public static void SendPacketToPlayer(string username, Packet packet, NetDeliveryMethod method = NetDeliveryMethod.ReliableOrdered)
+		static void SendPacketToPlayer(NetConnection connection, Packet packet, NetDeliveryMethod method = NetDeliveryMethod.ReliableOrdered)
 		{
-			if (FindPlayer(username, out NetConnection connection) != null)
-			{
-				SendPacketToPlayer(connection, packet, method);
-			}
-			else
-			{
-				Logger.Error($"Could not find player {username.FormatUsername()}!");
-			}
-		}
-
-		public static void SendPacketToPlayer(NetConnection connection, Packet packet, NetDeliveryMethod method = NetDeliveryMethod.ReliableOrdered)
-		{
+			// Logger.Debug($"Sending packet of type '{packet.Type}'.");
 			NetOutgoingMessage msg = server.CreateMessage();
 			msg.Write((byte) packet.Type);
 			msg.Write(packet);
 			server.SendMessage(msg, connection, method);
 		}
 
-		public static void SendPacketToAll(Packet packet, NetDeliveryMethod method = NetDeliveryMethod.ReliableOrdered)
+		static void SendPacketToAll(Packet packet, NetConnection except = null, NetDeliveryMethod method = NetDeliveryMethod.ReliableOrdered)
 		{
+			// Logger.Debug($"Sending packet of type '{packet.Type}' to all.");
 			NetOutgoingMessage msg = server.CreateMessage();
 			msg.Write((byte) packet.Type);
-			packet.Serialize(msg);
 			msg.Write(packet);
-			server.SendToAll(msg, method);
+			server.SendToAll(msg, except, method, 0);
 		}
 
 		static void OnStatusChanged(NetIncomingMessage msg)
@@ -165,15 +151,22 @@ namespace MultiplayerSFS.Server
 			string playerName = FindPlayer(msg.SenderConnection)?.username.FormatUsername();
 			Logger.Info($"Status of {playerName} @ {msg.SenderEndPoint} changed to {status} - \"{reason}\".");
 
-			if (status == NetConnectionStatus.Disconnected)
+			switch (status)
 			{
-				OnPlayerDisconnect(msg.SenderConnection);
+				case NetConnectionStatus.Disconnected:
+					OnPlayerDisconnect(msg.SenderConnection);
+					break;
+				case NetConnectionStatus.Connected:
+					OnPlayerSuccessfulConnect(msg.SenderConnection);
+					break;
+				default:
+					break;
 			}
 		}
 
-        static void OnPlayerConnect(NetIncomingMessage msg)
+        static void OnPlayerConnectionAttempt(NetIncomingMessage msg)
 		{
-			Client_JoinRequest request = msg.SenderConnection.RemoteHailMessage.Read<Client_JoinRequest>();
+			Packet_JoinRequest request = msg.SenderConnection.RemoteHailMessage.Read<Packet_JoinRequest>();
             NetConnection connection = msg.SenderConnection;
 			Logger.Info($"Recieved join request from {request.Username.FormatUsername()} @ {connection.RemoteEndPoint}.", true);
 
@@ -201,19 +194,20 @@ namespace MultiplayerSFS.Server
 
 			Logger.Info($"Approved join request, sending world info...", true);
 			
+            ConnectedPlayer newPlayer = new ConnectedPlayer(request.Username);
+			connectedPlayers.Add(connection.RemoteEndPoint, newPlayer);
+
 			NetOutgoingMessage hail = server.CreateMessage();
 			hail.Write
 			(
-				new Server_ServerInfo()
+				new Packet_JoinResponse()
 				{
+					PlayerId = newPlayer.id,
 					WorldTime = world.worldTime,
 					Difficulty = world.difficulty,
-					Rockets = world.rockets,
-					ConnectedPlayers = connectedPlayers.Values.Select((ConnectedPlayer player) => player.username).ToList(),
 				}
 			);
 			connection.Approve(hail);
-			connectedPlayers.Add(connection.RemoteEndPoint, new ConnectedPlayer(request.Username));
 			return;
 
 			ConnectionDenied:
@@ -221,26 +215,190 @@ namespace MultiplayerSFS.Server
 				connection.Deny(reason);
 		}
 
+		static void OnPlayerSuccessfulConnect(NetConnection connection)
+		{
+			ConnectedPlayer player = FindPlayer(connection);
+			if (player == null)
+			{
+				Logger.Warning("Missing new player while sending world info!");
+				return;
+			}
+
+			SendPacketToAll
+			(
+				new Packet_PlayerConnected()
+				{
+					Id = player.id,
+					Username = player.username,
+					PrintMessage = true,
+				},
+				connection
+			);
+			foreach (KeyValuePair<int, RocketState> kvp in world.rockets)
+			{
+				SendPacketToPlayer
+				(
+					connection,
+					new Packet_CreateRocket()
+					{
+						GlobalId = kvp.Key,
+						Rocket = kvp.Value,
+					}
+				);
+			}
+			foreach (KeyValuePair<IPEndPoint, ConnectedPlayer> kvp in connectedPlayers)
+			{
+				SendPacketToPlayer
+				(
+					connection,
+					new Packet_PlayerConnected()
+					{
+						Id = kvp.Value.id,
+						Username = kvp.Value.username,
+						PrintMessage = false,
+					}
+				);
+				SendPacketToPlayer
+				(
+					connection,
+					new Packet_UpdatePlayerControl()
+					{
+						PlayerId = kvp.Value.id,
+						RocketId = kvp.Value.controlledRocket,
+					}
+				);
+			}
+		}
+
 		static void OnPlayerDisconnect(NetConnection connection)
         {
-			string username = FindPlayer(connection)?.username.FormatUsername();
-			connectedPlayers.Remove(connection.RemoteEndPoint);
-            SendPacketToAll(new Server_PlayerDisconnected() { Name = username });
+			ConnectedPlayer player = FindPlayer(connection);
+            if (player != null)
+			{
+				SendPacketToAll(new Packet_PlayerDisconnected() { Id = player.id });
+				connectedPlayers.Remove(connection.RemoteEndPoint);
+			}
         }
+
+		static void OnCompleteResync()
+		{
+			Logger.Info("Sending complete resync...");
+			foreach (KeyValuePair<int, RocketState> kvp in world.rockets)
+			{
+				SendPacketToAll
+				(
+					new Packet_CreateRocket()
+					{
+						GlobalId = kvp.Key,
+						Rocket = kvp.Value,
+					}
+				);
+			}
+		}
+
+		static void UpdatePlayerAuthorities()
+		{
+			foreach (ConnectedPlayer player in connectedPlayers.Values)
+			{
+				player.updateAuthority.Clear();
+			}
+
+			// * No players are connected or controlling rockets.
+			if (connectedPlayers.All((KeyValuePair<IPEndPoint, ConnectedPlayer> kvp) => kvp.Value.controlledRocket < 0))
+            {
+                return;
+            }
+
+			int maxCount = 1;
+			foreach (KeyValuePair<int, RocketState> kvp in world.rockets)
+			{
+				ConnectedPlayer bestPlayer = null;
+				foreach (ConnectedPlayer player in connectedPlayers.Values)
+				{
+					if (player.updateAuthority.Count > maxCount)
+                    {
+                        maxCount = player.updateAuthority.Count;
+                    }
+
+                    if (world.rockets.TryGetValue(player.controlledRocket, out RocketState controlledRocket))
+					{
+						// * Players controlling a rocket should always have update authority over that rocket.
+						if (player.controlledRocket == kvp.Key)
+						{
+							bestPlayer = player;
+							break;
+						}
+
+						// * Players in 'load range' of a rocket should have update authority over that rocket.
+						Double2 distance = controlledRocket.location.position - kvp.Value.location.position;
+						if (distance.sqrMagnitude <= settings.sqrLoadRange)
+						{
+							// * If two or more players are in load range of a rocket, update authority should be given to the player with the lowest latency.
+							if (bestPlayer != null && bestPlayer.avgTripTime < player.avgTripTime)
+							{
+								continue;
+							}
+							bestPlayer = player;
+						}
+
+                        // * All other rockets should be distributed between players.
+                        // TODO: There is likely a better way to distribute the remaining rockets which takes into account connection latency.
+                        // TODO: (currently it just checks if the current player's number of 'authorities' is below the highest count)
+                        if (bestPlayer == null && player.updateAuthority.Count <= maxCount)
+                        {
+                            bestPlayer = player;
+                        }
+                    }
+
+				}
+				bestPlayer.updateAuthority.Add(kvp.Key);
+			}
+
+			foreach (KeyValuePair<IPEndPoint, ConnectedPlayer> kvp in connectedPlayers)
+			{
+				SendPacketToPlayer
+				(
+					server.GetConnection(kvp.Key),
+					new Packet_UpdatePlayerAuthority()
+					{
+						RocketIds = kvp.Value.updateAuthority,
+					}
+				);
+			}
+		}
 
         static void OnIncomingPacket(NetIncomingMessage msg)
         {
-			PacketType packetType = (PacketType) msg.ReadByte();
+			// Logger.Debug($"Packet Bits: {msg.LengthBits}");
+            PacketType packetType = (PacketType) msg.ReadByte();
+			Logger.Debug($"Recieved packet of type '{packetType}'.");
 			switch (packetType)
 			{
-				case PacketType.Client_JoinRequest:
+				case PacketType.UpdatePlayerControl:
+					OnPacket_UpdatePlayerControl(msg);
+					break;
+
+				case PacketType.CreateRocket:
+					OnPacket_CreateRocket(msg);
+					break;
+				case PacketType.DestroyRocket:
+					OnPacket_DestroyRocket(msg);
+					break;
+				case PacketType.UpdateRocketLocation:
+					OnPacket_UpdateRocketLocation(msg);
+					break;
+				case PacketType.UpdateRocketControls:
+					OnPacket_UpdateRocketControls(msg);
+					break;
+				
+				case PacketType.JoinRequest:
 					Logger.Warning("Recieved join request outside of connection attempt.");
 					break;
 
-				case PacketType.Server_PlayerConnected:
-				case PacketType.Server_PlayerDisconnected:
-				case PacketType.Server_ServerInfo:
-				case PacketType.Server_SpawnRocket:
+				case PacketType.PlayerConnected:
+				case PacketType.PlayerDisconnected:
+				case PacketType.JoinResponse:
+				case PacketType.UpdatePlayerAuthority:
 					Logger.Warning($"Recieved packet (of type {packetType}) intended for clients.");
 					break;
 
@@ -250,21 +408,94 @@ namespace MultiplayerSFS.Server
 			}
         }
 
-		static string FormatUsername(this string username)
+		static void OnPacket_UpdatePlayerControl(NetIncomingMessage msg)
 		{
-            return string.IsNullOrWhiteSpace(username) ? "???" : $"'{username}'";
-        }
+			Packet_UpdatePlayerControl packet = msg.Read<Packet_UpdatePlayerControl>();
+			if (connectedPlayers.TryGetValue(msg.SenderEndPoint, out ConnectedPlayer player))
+			{
+				if (player.id == packet.PlayerId)
+				{
+					player.controlledRocket = packet.RocketId;
+					SendPacketToAll
+					(
+						packet,
+						msg.SenderConnection
+					);
+				}
+				else
+				{
+					Logger.Warning("Incorrect player id while trying to update controlled rocket!");
+				}
+			}
+			else
+			{
+				Logger.Error("Missing connected player while trying to update controlled rocket!");
+			}
+		}
+
+		static void OnPacket_CreateRocket(NetIncomingMessage msg)
+		{
+			Packet_CreateRocket packet = msg.Read<Packet_CreateRocket>();
+			packet.GlobalId = world.rockets.InsertNew(packet.Rocket);
+			SendPacketToAll(packet);
+		}
+
+		static void OnPacket_DestroyRocket(NetIncomingMessage msg)
+		{
+			Packet_DestroyRocket packet = msg.Read<Packet_DestroyRocket>();
+			SendPacketToAll(packet);
+		}
+
+		static void OnPacket_UpdateRocketLocation(NetIncomingMessage msg)
+		{
+			Packet_UpdateRocketLocation packet = msg.Read<Packet_UpdateRocketLocation>();
+			if (world.rockets.TryGetValue(packet.Id, out RocketState state))
+			{
+				state.location = packet.Location;
+				state.rotation = packet.Rotation;
+				state.angularVelocity = packet.AngularVelocity;
+				Logger.Debug(packet.Location.velocity);
+				SendPacketToAll(packet, msg.SenderConnection);
+			}
+		}
+
+		static void OnPacket_UpdateRocketControls(NetIncomingMessage msg)
+		{
+			Packet_UpdateRocketControls packet = msg.Read<Packet_UpdateRocketControls>();
+			if (world.rockets.TryGetValue(packet.Id, out RocketState state))
+			{
+				state.throttleOn = packet.ThrottleOn;
+                state.throttlePercent = packet.ThrottlePercent;
+                state.RCS = packet.RCS;
+				SendPacketToAll(packet, msg.SenderConnection);
+			}
+		}
 	}
 
 	public class ConnectedPlayer
 	{
+		public static Random idGenerator = new Random();
+		public int id;
 		public string username;
 		public float avgTripTime;
 
+		public int controlledRocket;
+		public HashSet<int> updateAuthority;
+
+
 		public ConnectedPlayer(string username)
 		{
+			HashSet<int> connectedPlayerIDs = Server.connectedPlayers.Select((KeyValuePair<IPEndPoint, ConnectedPlayer> kvp) => kvp.Value.id).ToHashSet();
+			do
+			{
+				id = idGenerator.Next();
+			}
+			while (connectedPlayerIDs.Contains(id));
+
 			this.username = username;
 			avgTripTime = float.PositiveInfinity;
+			controlledRocket = -1;
+			updateAuthority = new HashSet<int>();
 		}
 	}
 }

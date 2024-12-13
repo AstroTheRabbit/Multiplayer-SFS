@@ -10,6 +10,7 @@ namespace MultiplayerSFS.Server
 			{
 				// TODO: Settings loading.
 				Server.Initialize(new ServerSettings());
+				Server.Run();
 			}
 			catch (Exception e)
 			{

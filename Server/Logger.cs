@@ -41,5 +41,10 @@ namespace MultiplayerSFS.Server
             Console.WriteLine("[{0}] [ERROR]: {1}", Date(), exception);
             Console.ResetColor();
         }
+
+        public static string ToBitString(this byte b)
+        {
+            return Convert.ToString(b, 2).PadLeft(8, '0');
+        }
     }
 }

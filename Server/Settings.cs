@@ -7,12 +7,12 @@ namespace MultiplayerSFS.Server
 		/// </summary>
 		public string worldSavePath = "/Users/home/Library/Application Support/Steam/steamapps/common/Spaceflight Simulator/SpaceflightSimulatorGame.app/Saving/Worlds/Multiplayer Testing";
 		/// <summary>
-		/// Port used by the multiplayer server.
+		/// Port used by the server. Generally should not be changed, as this is also the default port for the client's join menu.
 		/// </summary>
 		public int port = 9806;
 		/// <summary>
 		/// Password required by players to access the multiplayer server.
-		/// WARNING: Leaving blank will allow any player who knows the server's IP address & port to join!
+		/// WARNING: Leaving blank will allow any player who knows the server's IP address to join!
 		/// </summary>
 		public string password = "";
 		/// <summary>
@@ -24,5 +24,18 @@ namespace MultiplayerSFS.Server
 		/// Prevents players from joining if their username is already in use on the server.
 		/// </summary>
 		public bool blockDuplicatePlayerNames = true;
+
+		/// <summary>
+		/// A time (in seconds) after which the server will send a full `CreateRocket` packets to resync all rockets.
+		/// A shorter resync period will ensure that rockets are better synchronised between connected players,
+		/// but will also result in more lag (since the rockets have to be completely recreated client-side).
+		/// </summary>
+		public double completeResyncPeriod = 300;
+
+		/// <summary>
+		/// Distance (squared) used to determine if a player should be given 'update authority' of a near-by rocket.
+		/// Should always be set above the game's current (un)load distance (1.2 * 5000 iirc).
+		/// </summary>
+		public double sqrLoadRange = 7500 * 7500;
 	}
 }
