@@ -104,10 +104,12 @@ namespace MultiplayerSFS.Mod
                 if (packet.LocalId == unsyncedToControl)
                 {
                     PlayerController.main.player.Value = rocket.rocket;
+                    GameCamerasManager.main.InstantlyRotateCamera();
+
                     unsyncedToControl = -1;
                     ClientManager.SendPacket(new Packet_UpdatePlayerControl() { PlayerId = ClientManager.playerId, RocketId = packet.GlobalId });
+                    // * This loading screen is opened in the `SceneLoader_LoadWorldScene` patch.
                     Menu.loading.Close();
-                    // * Loading screen is opened in `Patches.RocketManager_SpawnBlueprint.SyncBlueprint`.
                 }
             }
         }

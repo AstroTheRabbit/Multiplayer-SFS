@@ -1,6 +1,6 @@
+using System;
 using System.Linq;
 using System.Threading;
-using System.Threading.Tasks;
 using System.Reflection.Emit;
 using System.Collections.Generic;
 using UnityEngine;
@@ -12,13 +12,16 @@ using SFS.UI;
 using SFS.Input;
 using SFS.World;
 using SFS.Stats;
+using SFS.Parts;
 using SFS.Builds;
 using SFS.Career;
 using SFS.WorldBase;
 using SFS.Variables;
 using SFS.World.Maps;
 using SFS.Translations;
+using SFS.Parts.Modules;
 using MultiplayerSFS.Common;
+using Environment = SFS.World.Environment;
 using ModLoader.Helpers;
 
 namespace MultiplayerSFS.Mod
@@ -33,6 +36,9 @@ namespace MultiplayerSFS.Mod
         }
     }
 
+    /// <summary>
+    /// Diverts loading of the world when in multiplayer.
+    /// </summary>
     public class DivertLoading
     {
         [HarmonyPatch(typeof(SavingCache), nameof(SavingCache.Preload_WorldPersistent))]
@@ -42,7 +48,8 @@ namespace MultiplayerSFS.Mod
             {
                 if (Patches.multiplayerEnabled.Value)
                 {
-                    ref SavingCache.Data<WorldSave> worldPersistent = ref AccessTools.FieldRefAccess<SavingCache, SavingCache.Data<WorldSave>>("worldPersistent").Invoke(__instance);
+                    // ref SavingCache.Data<WorldSave> worldPersistent = ref AccessTools.FieldRefAccess<SavingCache, SavingCache.Data<WorldSave>>("worldPersistent").Invoke(__instance);
+                    ref SavingCache.Data<WorldSave> worldPersistent = ref __instance.FieldRef<SavingCache.Data<WorldSave>>("worldPersistent");
 
                     if (worldPersistent == null || needsRocketsAndBranches && (worldPersistent.result.data.rockets == null || worldPersistent.result.data.branches == null))
                     {
@@ -109,11 +116,12 @@ namespace MultiplayerSFS.Mod
                     }
                     LogManager.main.ClearBranches();
 
-                    if (SavingCache.main.TryLoadBuildPersistent(MsgDrawer.main, out Blueprint buildPersistent, eraseCache: false))
-                    {
-                        RocketManager.SpawnBlueprint(buildPersistent);
-                    }
-                    GameCamerasManager.main.InstantlyRotateCamera();
+                    // * The job of spawning the blueprint is transferred to the `SceneLoader.LoadWorldScene` patch, and changing `PlayerController.main.player.Value` is done by `LocalManager.CreateRocket`.
+                    // // if (SavingCache.main.TryLoadBuildPersistent(MsgDrawer.main, out Blueprint buildPersistent, eraseCache: false))
+                    // // {
+                    // //     RocketManager.SpawnBlueprint(buildPersistent);
+                    // // }
+                    // // GameCamerasManager.main.InstantlyRotateCamera();
 
                     return false;
                 }
@@ -122,6 +130,9 @@ namespace MultiplayerSFS.Mod
         }
     }
 
+    /// <summary>
+    /// Diverts the use of the `BuildPersistent` folder when in multiplayer.
+    /// </summary>
     public class DivertBuildSavingAndLoading
     {
         [HarmonyPatch(typeof(SavingCache), nameof(SavingCache.SaveBuildPersistent))]
@@ -178,6 +189,9 @@ namespace MultiplayerSFS.Mod
         }
     }
 
+    /// <summary>
+    /// Disables the world's automatic saving in multiplayer.
+    /// </summary>
     public class DisableWorldSaving
     {
         [HarmonyPatch(typeof(SavingCache), nameof(SavingCache.UpdateWorldPersistent))]
@@ -231,6 +245,9 @@ namespace MultiplayerSFS.Mod
         }
     }
 
+    /// <summary>
+    /// Changes various UI screens to remove elements that would break in multiplayer.
+    /// </summary>
     public class EditUI
     {
         [HarmonyPatch(typeof(HubManager), "Start")]
@@ -362,6 +379,9 @@ namespace MultiplayerSFS.Mod
         }
     }
 
+    /// <summary>
+    /// Prevents players from opening the world save/load screens.
+    /// </summary>
     public class DisableWorldSavingUI
     {
         [HarmonyPatch(typeof(LoadMenu), nameof(LoadMenu.OpenSaveMenu), new[] { typeof(CloseMode) })]
@@ -395,6 +415,9 @@ namespace MultiplayerSFS.Mod
 
     }
 
+    /// <summary>
+    /// Prevents players from using the revert feature to try and load a prior save.
+    /// </summary>
     public class DisableReverting
     {
         [HarmonyPatch(typeof(Revert), "HasRevert")]
@@ -430,6 +453,9 @@ namespace MultiplayerSFS.Mod
         }
     }
 
+    /// <summary>
+    /// Prevents players from entering timewarp.
+    /// </summary>
     public class DisableTimewarp
     {
         [HarmonyPatch(typeof(WorldTime), nameof(WorldTime.AccelerateTime))]
@@ -475,6 +501,9 @@ namespace MultiplayerSFS.Mod
         }
     }
 
+    /// <summary>
+    /// Removes code that changes the time scale at which the world operates.
+    /// </summary>
     public class DisablePausing
     {
         [HarmonyPatch(typeof(ScreenManager), "Awake")]
@@ -549,6 +578,7 @@ namespace MultiplayerSFS.Mod
 
             static Player CheckSwitchRocket(Player oldPlayer, Player newPlayer)
             {
+                // TODO: When a switch is prevented, the camera still pans as if it were switching.
                 if (Patches.multiplayerEnabled.Value)
                 {
                     if (newPlayer is Rocket rocket)
@@ -597,57 +627,172 @@ namespace MultiplayerSFS.Mod
             }
         }
 
+        // /// <summary>
+        // /// This method is usually called when the game is loading the world scene, after the game has left the build scene.
+        // /// Instead this patch sets up `RocketManager.SpawnBlueprint` for its use by 
+        // /// </summary>
+        // [HarmonyPatch(typeof(RocketManager), nameof(RocketManager.SpawnBlueprint))]
+        // public class RocketManager_SpawnBlueprint
+        // {
+        //     public static Rocket[] newRockets = null;
+        //     public static Rocket toControl = null;
+        //     public static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions)
+        //     {
+        //         // ? Skips `WorldView.main.SetViewLocation(Base.planetLoader.spaceCenter.LaunchPadLocation);`, which causes an exception.
+        //         instructions = instructions.Skip(5);
+        //         foreach (var code in instructions)
+        //         {
+        //             yield return code;
+        //             if (code.opcode == OpCodes.Ldloc_3)
+        //             {
+        //                 yield return CodeInstruction.Call(typeof(RocketManager_SpawnBlueprint), nameof(ReplacementMethod));
+        //                 yield return new CodeInstruction(OpCodes.Ret);
+        //             }
+        //         }
+        //     }
+
+        //     public static void ReplacementMethod(Rocket[] rockets)
+        //     {
+        //         Rocket rocket = rockets.FirstOrDefault((Rocket a) => a.hasControl.Value);
+        //         toControl = rocket ?? ((rockets.Length != 0) ? rockets[0] : null);
+        //         if (Patches.multiplayerEnabled.Value)
+        //         {
+        //             // ? Skip setting `PlayerController.main.player.Value`, and instead set `newRockets` so that it can be used in the `SceneLoader_LoadWorldScene` patch.
+        //             newRockets = rockets;
+        //         }
+        //         else
+        //         {
+	    //             PlayerController.main.player.Value = toControl;
+        //             WorldView.main.SetViewLocation(Base.planetLoader.spaceCenter.LaunchPadLocation);
+        //         }
+        //     }
+        // }
+
         /// <summary>
         /// Syncs the newly created rockets of a launched blueprint with the multiplayer server.
         /// </summary>
-        [HarmonyPatch(typeof(RocketManager), nameof(RocketManager.SpawnBlueprint))]
-        public static class RocketManager_SpawnBlueprint
+        [HarmonyPatch(typeof(SceneLoader), nameof(SceneLoader.LoadWorldScene))]
+        public static class SceneLoader_LoadWorldScene
         {
-            public static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions)
+            static List<RocketState> launchedRockets;
+
+            public static bool Prefix(bool launch)
             {
-                foreach (var code in instructions)
+                if (Patches.multiplayerEnabled.Value && launch)
                 {
-                    if (code.opcode == OpCodes.Ret)
+                    if (!SavingCache.main.TryLoadBuildPersistent(MsgDrawer.main, out Blueprint buildPersistent, eraseCache: false))
                     {
-                        yield return new CodeInstruction(OpCodes.Ldloc_3);
-                        yield return CodeInstruction.Call(typeof(RocketManager_SpawnBlueprint), nameof(SyncBlueprint));
+                        MsgDrawer.main.Log("Failed to load blueprint!");
+                        return false;
                     }
-                    yield return code;
+                    launchedRockets = BlueprintToRocketStates(buildPersistent);
+
+                    if (launchedRockets.Count == 0)
+                    {
+                        MsgDrawer.main.Log("Cannot launch an empty blueprint in multiplayer!");
+                        return false;
+                    }
+                    SceneHelper.OnWorldSceneLoaded += OnWorldLoad;
                 }
+                return true;
             }
 
-            public static void SyncBlueprint(Rocket[] rockets)
+            static void OnWorldLoad()
             {
-                if (Patches.multiplayerEnabled.Value)
+                SceneHelper.OnWorldSceneLoaded -= OnWorldLoad;
+                foreach (RocketState rocket in launchedRockets)
                 {
-                    Debug.Log(rockets.Length);
-                    if (rockets.Length == 0)
+                    int localId = LocalManager.unsyncedRockets.InsertNew();
+                    if (LocalManager.unsyncedToControl == -1)
+                        LocalManager.unsyncedToControl = localId;
+
+                    ClientManager.SendPacket(new Packet_CreateRocket() { LocalId = localId, Rocket = rocket });
+                }
+                Menu.loading.Open("Sending launch request to server...");
+                // * Loading screen is later closed in `LocalManager.CreateRocket`.
+            }
+
+            /// <summary>
+            /// An altered version of `RocketManager.SpawnBlueprint` that instead returns a `List<RocketState>`.
+            /// I would use a patched version of the original, but it relies on the world scene being loaded to use the rocket prefab.
+            /// </summary>
+            static List<RocketState> BlueprintToRocketStates(Blueprint blueprint)
+            {
+                if (blueprint.rotation != 0f)
+                {
+                    PartSave[] parts = blueprint.parts;
+                    foreach (PartSave obj in parts)
                     {
-                        SceneHelper.OnBuildSceneLoaded += AlertEmptyBuild;
-                        Base.sceneLoader.LoadBuildScene(false);
+                        obj.orientation += new Orientation(1f, 1f, blueprint.rotation);
+                        obj.position *= new Orientation(1f, 1f, blueprint.rotation);
                     }
-
-                    Menu.loading.Open("Sending launch request to server...");
-                    foreach (Rocket rocket in rockets)
-                    {
-                        RocketState state = new RocketState(new RocketSave(rocket));
-                        int localId = LocalManager.unsyncedRockets.InsertNew();
-                        if (rocket == PlayerController.main.player.Value || LocalManager.unsyncedToControl == -1)
-                            LocalManager.unsyncedToControl = localId;
-
-                        ClientManager.SendPacket(new Packet_CreateRocket() { LocalId = localId, Rocket = state });
-                        RocketManager.DestroyRocket(rocket, DestructionReason.Intentional);
-                    }
-
-                    Menu.loading.text.text = "Waiting for server response...";
-                    // * Loading screen is later closed in `LocalManager.CreateRocket`.
                 }
 
-                void AlertEmptyBuild()
+                Part[] createdParts = PartsLoader.CreateParts(blueprint.parts, null, null, OnPartNotOwned.Delete, out OwnershipState[] _);
+                Part[] ownedParts = createdParts.Where((Part a) => a != null).ToArray();
+                
+                if (blueprint.rotation != 0f)
                 {
-                    MsgDrawer.main.Log("Cannot launch an empty blueprint in multiplayer!");
-                    SceneHelper.OnBuildSceneLoaded -= AlertEmptyBuild;
+                    PartSave[] parts = blueprint.parts;
+                    foreach (PartSave obj2 in parts)
+                    {
+                        obj2.orientation += new Orientation(1f, 1f, -blueprint.rotation);
+                        obj2.position *= new Orientation(1f, 1f, -blueprint.rotation);
+                    }
                 }
+
+                Part_Utility.PositionParts(WorldView.ToLocalPosition(Base.planetLoader.spaceCenter.LaunchPadLocation.position), new Vector2(0.5f, 0f), round: true, useLaunchBounds: true, ownedParts);
+                new JointGroup(RocketManager.GenerateJoints(ownedParts), ownedParts.ToList()).RecreateGroups(out var newGroups);
+
+                Dictionary<int, int> partIndexToID = new Dictionary<int, int>(createdParts.Length);
+                Dictionary<Part, int> partToID = new Dictionary<Part, int>(createdParts.Length);
+                Dictionary<int, PartState> partIDs = new Dictionary<int, PartState>(createdParts.Length);
+                for (int i = 0; i < createdParts.Length; i++)
+                {
+                    Part part = createdParts[i];
+                    int id = partIDs.InsertNew(new PartState(new PartSave(part)));
+                    partIndexToID[i] = id;
+                    partToID[part] = id;
+                }
+
+                List<RocketState> result = new List<RocketState>(newGroups.Count);
+                foreach (JointGroup group in newGroups)
+                {
+                    HashSet<int> groupPartIDs = group.parts.Select((Part part) => partToID[part]).ToHashSet();
+                    RocketState state = new RocketState
+                    {
+                        rocketName = "",
+                        location = new WorldSave.LocationData(RocketManager_GetSpawnLocation.GetSpawnLocation(group)),
+                        rotation = 0,
+                        angularVelocity = 0,
+                        throttleOn = false,
+                        throttlePercent = 0.5f,
+                        RCS = false,
+
+                        input_TurnAxis = 0,
+                        input_HorizontalAxis = 0,
+                        input_VerticalAxis = 0,
+
+                        parts = group.parts.Select((Part part) => partToID[part]).ToDictionary((int id) => id, (int id) => partIDs[id]),
+                        joints = group.joints.Select((PartJoint joint) => new JointState(partToID[joint.a], partToID[joint.b])).ToList(),
+                        stages = blueprint.stages.Select((StageSave stage) => new StageState(stage, partIndexToID, groupPartIDs)).ToList(),
+                    };
+                    result.Add(state);
+                }
+                return result;
+            }
+        }
+
+        /// <summary>
+        /// Reverse patch of `RocketManager.GetSpawnLocation` so it can be called in `SceneLoader_LoadWorldScene.SpawnBlueprint`.
+        /// </summary>
+        [HarmonyPatch(typeof(RocketManager), "GetSpawnLocation")]
+        public class RocketManager_GetSpawnLocation
+        {
+            [HarmonyReversePatch]
+            public static Location GetSpawnLocation(JointGroup group)
+            {
+                throw new NotImplementedException("Reverse patch error!");
             }
         }
     }

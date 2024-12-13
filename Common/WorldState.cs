@@ -245,6 +245,11 @@ namespace MultiplayerSFS.Common
         public int id_B;
 
         public JointState() {}
+        public JointState(int id_A, int id_B)
+        {
+            this.id_A = id_A;
+            this.id_B = id_B;
+        }
         public JointState(JointSave save, Dictionary<int, int> partIndexToID)
         {
             id_A = partIndexToID[save.partIndex_A];
@@ -269,10 +274,15 @@ namespace MultiplayerSFS.Common
         public List<int> partIDs;
 
         public StageState() {}
-        public StageState(StageSave save, Dictionary<int, int> partIndexToID)
+        public StageState(StageSave save, Dictionary<int, int> partIndexToID, HashSet<int> onlyInclude = null)
         {
             stageID = save.stageId;
-            partIDs = save.partIndexes.Select((int idx) => partIndexToID[idx]).ToList();
+            IEnumerable<int> unfiltered = save.partIndexes.Select((int idx) => partIndexToID[idx]);
+            if (onlyInclude != null)
+            {
+                unfiltered = unfiltered.Where((int id) => onlyInclude.Contains(id));
+            }
+            partIDs = unfiltered.ToList();
         }
 
         public void Serialize(NetOutgoingMessage msg)

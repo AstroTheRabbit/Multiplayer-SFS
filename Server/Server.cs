@@ -17,6 +17,7 @@ namespace MultiplayerSFS.Server
 		public static Dictionary<IPEndPoint, ConnectedPlayer> connectedPlayers;
 
 		public static Timer resyncTimer;
+		public static Timer authorityTimer;
 
 		public static void Initialize(ServerSettings settings)
 		{
@@ -45,6 +46,18 @@ namespace MultiplayerSFS.Server
 				};
 				resyncTimer.Elapsed += (object source, ElapsedEventArgs e) => OnCompleteResync();
 			}
+
+			if (settings.updateAuthoritiesPeriod <= 0)
+			{
+				Logger.Error("The setting `updateAuthoritiesPeriod` cannot be less than or equal to 0!");
+				return;
+			}
+			authorityTimer = new Timer(1000 * settings.updateAuthoritiesPeriod)
+			{
+				AutoReset = true,
+				Enabled = true,
+			};
+			authorityTimer.Elapsed += (object source, ElapsedEventArgs e) => UpdatePlayerAuthorities();
 
             server = new NetServer(npc);
 			server.Start();
@@ -371,7 +384,7 @@ namespace MultiplayerSFS.Server
         {
 			// Logger.Debug($"Packet Bits: {msg.LengthBits}");
             PacketType packetType = (PacketType) msg.ReadByte();
-			Logger.Debug($"Recieved packet of type '{packetType}'.");
+			// Logger.Debug($"Recieved packet of type '{packetType}'.");
 			switch (packetType)
 			{
 				case PacketType.UpdatePlayerControl:

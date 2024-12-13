@@ -33,6 +33,13 @@ namespace MultiplayerSFS.Server
 		public double completeResyncPeriod = 300;
 
 		/// <summary>
+		/// A time (in seconds) after which the server will send `UpdatePlayerAuthority` packets to each player.
+		/// These 'authorities' are used to determine which player must provide update information (location, throttle, etc) for certain rockets.
+		/// It's generally recommended to keep this value low, but too low can lower players' FPS or even crash SFS.
+		/// </summary>
+		public double updateAuthoritiesPeriod = 10;
+
+		/// <summary>
 		/// Distance (squared) used to determine if a player should be given 'update authority' of a near-by rocket.
 		/// Should always be set above the game's current (un)load distance (1.2 * 5000 iirc).
 		/// </summary>
