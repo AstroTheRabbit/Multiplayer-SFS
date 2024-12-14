@@ -11,7 +11,7 @@ namespace MultiplayerSFS.Mod
 {
     public class JoinInfo
     {
-        public IPAddress address = IPAddress.Loopback;
+        public IPAddress address = IPAddress.Parse("10.0.0.72"); // ! FOR TESTING ONLY
         public int port = 9806;
         public string username = "DEFAULT_USERNAME";
         public string password = "DEFAULT_PASSWORD";

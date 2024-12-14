@@ -769,9 +769,10 @@ namespace MultiplayerSFS.Mod
                         throttlePercent = 0.5f,
                         RCS = false,
 
-                        input_TurnAxis = 0,
-                        input_HorizontalAxis = 0,
-                        input_VerticalAxis = 0,
+                        input_Turn = 0,
+                        input_Raw = Vector2.zero,
+                        input_Horizontal = Vector2.zero,
+                        input_Vertical = Vector2.zero,
 
                         parts = group.parts.Select((Part part) => partToID[part]).ToDictionary((int id) => id, (int id) => partIDs[id]),
                         joints = group.joints.Select((PartJoint joint) => new JointState(partToID[joint.a], partToID[joint.b])).ToList(),

@@ -3,8 +3,7 @@ using System.Net;
 using System.Threading;
 using System.Reflection;
 using System.Threading.Tasks;
-using System.Collections.Generic;
-using UnityEngine; 
+using UnityEngine;
 using Lidgren.Network;
 using SFS;
 using SFS.UI;
@@ -17,9 +16,8 @@ namespace MultiplayerSFS.Mod
     public static class ClientManager
     {
         public static NetClient client;
-        public static int playerId;
-
         public static WorldState world;
+        public static int playerId;
 
         public static async Task TryConnect(JoinInfo info, CancellationToken token)
         {
@@ -203,11 +201,8 @@ namespace MultiplayerSFS.Mod
                 case PacketType.DestroyRocket:
                     OnPacket_DestroyRocket(msg);
                     break;
-                case PacketType.UpdateRocketLocation:
-                    OnPacket_UpdateRocketLocation(msg);
-                    break;
-                case PacketType.UpdateRocketControls:
-                    OnPacket_UpdateRocketControls(msg);
+                case PacketType.UpdateRocket:
+                    OnPacket_UpdateRocket(msg);
                     break;
 
                 // // * Part packets
@@ -272,7 +267,7 @@ namespace MultiplayerSFS.Mod
             Packet_UpdatePlayerControl packet = msg.Read<Packet_UpdatePlayerControl>();
             if (LocalManager.players.TryGetValue(packet.PlayerId, out LocalPlayer player))
             {
-                player.currentRocket = packet.RocketId;
+                player.currentRocket.Value = packet.RocketId;
             }
             else
             {
@@ -298,35 +293,26 @@ namespace MultiplayerSFS.Mod
             LocalManager.DestroyRocket(packet.Id);
         }
 
-        static void OnPacket_UpdateRocketLocation(NetIncomingMessage msg)
+        static void OnPacket_UpdateRocket(NetIncomingMessage msg)
         {
-            Packet_UpdateRocketLocation packet = msg.Read<Packet_UpdateRocketLocation>();
+            Packet_UpdateRocket packet = msg.Read<Packet_UpdateRocket>();
             if (world.rockets.TryGetValue(packet.Id, out RocketState state))
             {
-                state.location = packet.Location;
+                state.input_Turn = packet.Input_Turn;
+                state.input_Raw = packet.Input_Raw;
+                state.input_Horizontal = packet.Input_Horizontal;
+                state.input_Vertical = packet.Input_Vertical;
                 state.rotation = packet.Rotation;
                 state.angularVelocity = packet.AngularVelocity;
-                LocalManager.UpdateLocalRocketLocation(packet);
-            }
-            else
-            {
-                Debug.LogError($"Missing rocket from WorldState when trying to update location!");
-            }
-        }
-
-        static void OnPacket_UpdateRocketControls(NetIncomingMessage msg)
-        {
-            Packet_UpdateRocketControls packet = msg.Read<Packet_UpdateRocketControls>();
-            if (world.rockets.TryGetValue(packet.Id, out RocketState state))
-            {
-                state.throttleOn = packet.ThrottleOn;
                 state.throttlePercent = packet.ThrottlePercent;
+                state.throttleOn = packet.ThrottleOn;
                 state.RCS = packet.RCS;
-                LocalManager.UpdateLocalRocketControls(packet);
+                state.location = packet.Location;
+                LocalManager.UpdateLocalRocket(packet);
             }
             else
             {
-                Debug.LogError($"Missing rocket from WorldState when trying to update controls!");
+                Debug.LogError($"Missing rocket from WorldState!");
             }
         }
 

@@ -2,11 +2,14 @@ using System;
 using System.Linq;
 using System.Collections.Generic;
 using Lidgren.Network;
+using UnityEngine;
 using SFS.IO;
 using SFS.Parts;
 using SFS.World;
 using SFS.WorldBase;
 using SFS.Parsers.Json;
+using Random = System.Random;
+using static SFS.World.WorldSave;
 
 namespace MultiplayerSFS.Common
 {
@@ -80,16 +83,17 @@ namespace MultiplayerSFS.Common
     public class RocketState : INetData
     {
         public string rocketName;
-        public WorldSave.LocationData location;
+        public LocationData location;
         public float rotation;
         public float angularVelocity;
         public bool throttleOn;
         public float throttlePercent;
         public bool RCS;
 
-        public float input_TurnAxis;
-        public float input_HorizontalAxis;
-        public float input_VerticalAxis;
+        public float input_Turn;
+        public Vector2 input_Raw;
+        public Vector2 input_Horizontal;
+        public Vector2 input_Vertical;
 
         public Dictionary<int, PartState> parts;
         public List<JointState> joints;
@@ -107,9 +111,10 @@ namespace MultiplayerSFS.Common
             throttlePercent = save.throttlePercent;
             RCS = save.RCS;
 
-            input_TurnAxis = 0;
-            input_HorizontalAxis = 0;
-            input_VerticalAxis = 0;
+            input_Turn = 0;
+            input_Raw = Vector2.zero;
+            input_Horizontal = Vector2.zero;
+            input_Vertical = Vector2.zero;
 
             Dictionary<int, int> partIndexToID = new Dictionary<int, int>(save.parts.Length);
             parts = new Dictionary<int, PartState>(save.parts.Length);

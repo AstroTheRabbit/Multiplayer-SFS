@@ -7,6 +7,7 @@ using SFS.World;
 using UnityEngine;
 using MultiplayerSFS.Common;
 using SFS.UI;
+using SFS.Variables;
 
 namespace MultiplayerSFS.Mod
 {
@@ -23,6 +24,9 @@ namespace MultiplayerSFS.Mod
         public static HashSet<int> updateAuthority;
         
         static Rocket RocketPrefab => AccessTools.StaticFieldRefAccess<Rocket>(typeof(RocketManager), "prefab");
+        
+        public const int UPDATE_TICKS = 5;
+        public static int current_ticks = 0;
 
         public static void Initialize()
         {
@@ -42,31 +46,31 @@ namespace MultiplayerSFS.Mod
 
         void Update()
         {
+            // TODO: This tick counting method is kinda silly; should be replaced with a seperate update cycle that isn't determined by the game's FPS.
+            if (current_ticks > 0)
+            {
+                current_ticks--;
+                return;
+            }
+            current_ticks = UPDATE_TICKS;
             foreach (int id in updateAuthority)
             {
-                if (syncedRockets.TryGetValue(id, out LocalRocket rocket) && rocket.rocket != null)
+                if (syncedRockets.TryGetValue(id, out LocalRocket localRocket) && localRocket.rocket is Rocket rocket)
                 {
                     ClientManager.SendPacket
                     (
-                        new Packet_UpdateRocketLocation()
+                        new Packet_UpdateRocket()
                         {
                             Id = id,
-                            Location = new WorldSave.LocationData(rocket.rocket.location.Value),
-                            Rotation = rocket.rocket.rb2d.transform.eulerAngles.z,
-                            AngularVelocity = rocket.rocket.rb2d.angularVelocity,
-                        }
-                    );
-                    ClientManager.SendPacket
-                    (
-                        new Packet_UpdateRocketControls()
-                        {
-                            Id = id,
-                            ThrottleOn = rocket.rocket.throttle.throttleOn,
-                            ThrottlePercent = rocket.rocket.throttle.throttlePercent,
-                            RCS = rocket.rocket.arrowkeys.rcs,
-                            Input_TurnAxis = rocket.rocket.arrowkeys.turnAxis,
-                            Input_HorizontalAxis = rocket.rocket.arrowkeys.rawArrowkeysAxis.Value.x,
-                            Input_VerticalAxis = rocket.rocket.arrowkeys.rawArrowkeysAxis.Value.y,
+                            Input_Turn = rocket.arrowkeys.turnAxis,
+                            Input_Raw = rocket.arrowkeys.rawArrowkeysAxis,
+                            Input_Horizontal = rocket.arrowkeys.horizontalAxis,
+                            Input_Vertical = rocket.arrowkeys.verticalAxis,
+                            Rotation = rocket.rb2d.transform.eulerAngles.z,
+                            AngularVelocity = rocket.rb2d.angularVelocity,
+                            ThrottlePercent = rocket.throttle.throttlePercent,
+                            ThrottleOn = rocket.throttle.throttleOn,
+                            RCS = rocket.arrowkeys.rcs,
                         }
                     );
                 }
@@ -181,51 +185,23 @@ namespace MultiplayerSFS.Mod
             ClientManager.world.rockets.Remove(id);
         }
 
-        public static void UpdateLocalRocketLocation(Packet_UpdateRocketLocation packet)
+        public static void UpdateLocalRocket(Packet_UpdateRocket packet)
         {
             if (syncedRockets.TryGetValue(packet.Id, out LocalRocket rocket) && rocket.rocket != null)
             {
+                Arrowkeys arrowkeys = rocket.rocket.arrowkeys;
+                arrowkeys.rawArrowkeysAxis.Value = packet.Input_Raw;
+                arrowkeys.horizontalAxis.Value = packet.Input_Horizontal;
+                arrowkeys.verticalAxis.Value = packet.Input_Vertical;
+                arrowkeys.rcs.Value = packet.RCS;
+
                 rocket.rocket.rb2d.transform.eulerAngles = new Vector3(0f, 0f, packet.Rotation);
-                rocket.rocket.physics.SetLocationAndState(packet.Location.GetSaveLocation(WorldTime.main.worldTime), true);
                 rocket.rocket.rb2d.angularVelocity = packet.AngularVelocity;
-            }
-        }
-
-        public static void UpdateLocalRocketControls(Packet_UpdateRocketControls packet)
-        {
-            if (syncedRockets.TryGetValue(packet.Id, out LocalRocket rocket) && rocket.rocket != null)
-            {
-                rocket.rocket.throttle.throttleOn.Value = packet.ThrottleOn;
                 rocket.rocket.throttle.throttlePercent.Value = packet.ThrottlePercent;
-                rocket.rocket.arrowkeys.rcs.Value = packet.RCS;
+                rocket.rocket.throttle.throttleOn.Value = packet.ThrottleOn;
+                rocket.rocket.physics.SetLocationAndState(packet.Location.GetSaveLocation(WorldTime.main.worldTime), true);
             }
         }
-
-        // public static void ActivateLocalPart(Packet_ActivatePart packet)
-        // {
-        //     if (localRockets.TryGetValue(packet.RocketId, out LocalRocket rocket) && rocket.rocket != null)
-        //     {
-        //         if (rocket.rocket.physics.PhysicsMode)
-        //         {
-        //             if (rocket.parts.TryGetValue(packet.PartId, out Part part))
-        //             {
-        //                 part.
-        //             }
-        //             else
-        //             {
-        //                 Debug.LogError("Failed to find local part while attempting to activate it!");
-        //             }
-        //         }
-        //         else
-        //         {
-        //             MarkRocketDirty();
-        //         }
-        //     }
-        //     else
-        //     {
-        //         Debug.LogError("Failed to find local rocket while attempting to activate one of its parts!");
-        //     }
-        // }
     }
 
     public class LocalRocket
@@ -250,12 +226,18 @@ namespace MultiplayerSFS.Mod
     public class LocalPlayer
     {
         public string username;
-        public int currentRocket;
+        public Int_Local currentRocket;
 
         public LocalPlayer(string username)
         {
             this.username = username;
-            currentRocket = -1;
+            currentRocket = new Int_Local() { Value = -1 };
+            currentRocket.OnChange += OnControlledRocketChange;
+        }
+
+        public void OnControlledRocketChange()
+        {
+            // TODO: Name tags above controlled rockets (on map as well?).
         }
     }
 }

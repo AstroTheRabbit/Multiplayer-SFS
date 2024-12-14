@@ -1,7 +1,8 @@
 ﻿using System.Collections.Generic;
 using Lidgren.Network;
-using SFS.World;
+using UnityEngine;
 using SFS.WorldBase;
+using static SFS.World.WorldSave;
 
 namespace MultiplayerSFS.Common
 {
@@ -43,25 +44,22 @@ namespace MultiplayerSFS.Common
         /// </summary>
         DestroyRocket,
         /// <summary>
-        /// Sent to update a rocket's location (position, velocity, etc).
+        /// Sent to update a rocket's current state, which includes throttle, RCS, movement controls, location, rotation, and angular velocity.
         /// </summary>
-        UpdateRocketLocation,
-        /// <summary>
-        /// Sent to update a rocket's throttle, RCS, and movement controls.
-        /// </summary>
-        UpdateRocketControls,
+        UpdateRocket,
 
         // * Part packets
         /// <summary>
-        /// Sent whenever a part has been activated.
+        /// Sent whenever a part has changed state - staging, manual activation, etc.
         /// </summary>
-        ActivatePart,
+        UpdatePart,
         /// <summary>
         /// Sent whenever a part is destroyed.
         /// </summary>
         DestroyPart,
         
         // * Staging Packets
+        // TODO: Maybe replace with a general `UpdateStaging` packet?
         /// <summary>
         /// Sent whenever a stage has been created.
         /// </summary>
@@ -238,73 +236,71 @@ namespace MultiplayerSFS.Common
             Id = msg.ReadInt32();
         }
     }
-    public class Packet_UpdateRocketLocation : Packet
+    public class Packet_UpdateRocket : Packet
     {
         public int Id { get; set; }
-        public WorldSave.LocationData Location { get; set; }
+        public float Input_Turn { get; set; }
+        // * Since the directional axes differ from the raw input depending on the controlling player's camera rotation, it's easier to just send all three values.
+        public Vector2 Input_Raw { get; set; }
+        public Vector2 Input_Horizontal { get; set; }
+        public Vector2 Input_Vertical { get; set; }
         public float Rotation { get; set; }
         public float AngularVelocity { get; set; }
+        public float ThrottlePercent { get; set; }
+        public bool ThrottleOn { get; set; }
+        public bool RCS { get; set; }
+        public LocationData Location { get; set; }
 
-        public override PacketType Type => PacketType.UpdateRocketLocation;
+        public override PacketType Type => PacketType.UpdateRocket;
         public override void Serialize(NetOutgoingMessage msg)
         {
             msg.Write(Id);
-            msg.Write(Location);
+            msg.Write(Input_Turn);
+            msg.Write(Input_Raw);
+            msg.Write(Input_Horizontal);
+            msg.Write(Input_Vertical);
             msg.Write(Rotation);
             msg.Write(AngularVelocity);
+            msg.Write(ThrottlePercent);
+            msg.Write(ThrottleOn);
+            msg.Write(RCS);
+            msg.Write(Location);
         }
         public override void Deserialize(NetIncomingMessage msg)
         {
             Id = msg.ReadInt32();
-            Location = msg.ReadLocation();
+            Input_Turn = msg.ReadFloat();
+            Input_Raw = msg.ReadVector2();
+            Input_Horizontal = msg.ReadVector2();
+            Input_Vertical = msg.ReadVector2();
             Rotation = msg.ReadFloat();
             AngularVelocity = msg.ReadFloat();
-        }
-    }
-    public class Packet_UpdateRocketControls : Packet
-    {
-        public int Id { get; set; }
-        public bool ThrottleOn { get; set; }
-        public float ThrottlePercent { get; set; }
-        public bool RCS { get; set; }
-        public float Input_TurnAxis { get; set; }
-        public float Input_HorizontalAxis { get; set; }
-        public float Input_VerticalAxis { get; set; }
-
-        public override PacketType Type => PacketType.UpdateRocketControls;
-        public override void Serialize(NetOutgoingMessage msg)
-        {
-            msg.Write(Id);
-            msg.Write(ThrottleOn);
-            msg.Write(ThrottlePercent);
-            msg.Write(RCS);
-        }
-        public override void Deserialize(NetIncomingMessage msg)
-        {
-            Id = msg.ReadInt32();
-            ThrottleOn = msg.ReadBoolean();
             ThrottlePercent = msg.ReadFloat();
+            ThrottleOn = msg.ReadBoolean();
             RCS = msg.ReadBoolean();
+            Location = msg.ReadLocation();
         }
     } 
 
     // * Part Packets
-    public class Packet_ActivatePart : Packet
+    public class Packet_UpdatePart : Packet
     {
-        // TODO: Parts like the launch escape system activate differently depending on which region of the part is clicked, and so that information will have to be added to this packet.
         public int RocketId { get; set; }
         public int PartId { get; set; }
+        public PartState Part { get; set; }
 
-        public override PacketType Type => PacketType.ActivatePart;
+        public override PacketType Type => PacketType.UpdatePart;
         public override void Serialize(NetOutgoingMessage msg)
         {
             msg.Write(RocketId);
             msg.Write(PartId);
+            msg.Write(Part);
         }
         public override void Deserialize(NetIncomingMessage msg)
         {
             RocketId = msg.ReadInt32();
             PartId = msg.ReadInt32();
+            Part = msg.Read<PartState>();
         }
     }
     public class Packet_DestroyPart : Packet

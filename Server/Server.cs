@@ -397,11 +397,8 @@ namespace MultiplayerSFS.Server
 				case PacketType.DestroyRocket:
 					OnPacket_DestroyRocket(msg);
 					break;
-				case PacketType.UpdateRocketLocation:
-					OnPacket_UpdateRocketLocation(msg);
-					break;
-				case PacketType.UpdateRocketControls:
-					OnPacket_UpdateRocketControls(msg);
+				case PacketType.UpdateRocket:
+					OnPacket_UpdateRocket(msg);
 					break;
 				
 				case PacketType.JoinRequest:
@@ -459,27 +456,21 @@ namespace MultiplayerSFS.Server
 			SendPacketToAll(packet);
 		}
 
-		static void OnPacket_UpdateRocketLocation(NetIncomingMessage msg)
+		static void OnPacket_UpdateRocket(NetIncomingMessage msg)
 		{
-			Packet_UpdateRocketLocation packet = msg.Read<Packet_UpdateRocketLocation>();
+			Packet_UpdateRocket packet = msg.Read<Packet_UpdateRocket>();
 			if (world.rockets.TryGetValue(packet.Id, out RocketState state))
 			{
-				state.location = packet.Location;
-				state.rotation = packet.Rotation;
-				state.angularVelocity = packet.AngularVelocity;
-				Logger.Debug(packet.Location.velocity);
-				SendPacketToAll(packet, msg.SenderConnection);
-			}
-		}
-
-		static void OnPacket_UpdateRocketControls(NetIncomingMessage msg)
-		{
-			Packet_UpdateRocketControls packet = msg.Read<Packet_UpdateRocketControls>();
-			if (world.rockets.TryGetValue(packet.Id, out RocketState state))
-			{
-				state.throttleOn = packet.ThrottleOn;
+				state.input_Turn = packet.Input_Turn;
+                state.input_Raw = packet.Input_Raw;
+                state.input_Horizontal = packet.Input_Horizontal;
+                state.input_Vertical = packet.Input_Vertical;
+                state.rotation = packet.Rotation;
+                state.angularVelocity = packet.AngularVelocity;
                 state.throttlePercent = packet.ThrottlePercent;
+                state.throttleOn = packet.ThrottleOn;
                 state.RCS = packet.RCS;
+                state.location = packet.Location;
 				SendPacketToAll(packet, msg.SenderConnection);
 			}
 		}
