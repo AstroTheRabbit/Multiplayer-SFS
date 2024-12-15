@@ -40,12 +40,12 @@ namespace MultiplayerSFS.Mod
             AddMultiplayerButton();
             SceneHelper.OnHomeSceneLoaded += AddMultiplayerButton;
             buildPersistentFolder = new FolderPath(ModFolder).Extend(".BlueprintPersistent");
-            Patches.multiplayerEnabled.OnChange += (bool value) => { Application.runInBackground = value; };
+            ClientManager.multiplayerEnabled.OnChange += (bool value) => { Application.runInBackground = value; };
         }
 
         public static void AddMultiplayerButton()
         {
-            Patches.multiplayerEnabled.Value = false;
+            ClientManager.multiplayerEnabled.Value = false;
             Application.quitting += () => ClientManager.client?.Shutdown("Application quitting");
             
             Transform buttons = GameObject.Find("Buttons").transform;

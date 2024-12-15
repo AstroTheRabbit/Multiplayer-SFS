@@ -10,16 +10,18 @@ using SFS.UI;
 using SFS.World;
 using SFS.WorldBase;
 using MultiplayerSFS.Common;
+using SFS.Variables;
 
 namespace MultiplayerSFS.Mod
 {
     public static class ClientManager
     {
+        public static Bool_Local multiplayerEnabled = new Bool_Local() { Value = false };
         public static NetClient client;
         public static WorldState world;
         public static int playerId;
 
-        public static async Task TryConnect(JoinInfo info, CancellationToken token)
+        public static async Task TryConnect(JoinInfo info)
         {
             if (client != null && client.Status != NetPeerStatus.NotRunning)
                 client.Shutdown("Re-attempting join request");
@@ -54,7 +56,6 @@ namespace MultiplayerSFS.Mod
                 NetIncomingMessage msg;
                 while ((msg = client.ReadMessage()) == null)
                 {
-                    token.ThrowIfCancellationRequested();
                     await Task.Yield();
                 }
 
@@ -243,13 +244,16 @@ namespace MultiplayerSFS.Mod
             msg.Write((byte) packet.Type);
             msg.Write(packet);
             client.SendMessage(msg, method);
-            // client.FlushSendQueue();
         }
 
         static void OnPacket_PlayerConnected(NetIncomingMessage msg)
         {
             Packet_PlayerConnected packet = msg.Read<Packet_PlayerConnected>();
             LocalManager.players.Add(packet.Id, new LocalPlayer(packet.Username));
+            if (packet.PrintMessage)
+            {
+                MsgDrawer.main.Log($"'{packet.Username}' connected");
+            }
         }
 
         static void OnPacket_PlayerDisconnected(NetIncomingMessage msg)
@@ -257,7 +261,7 @@ namespace MultiplayerSFS.Mod
             Packet_PlayerDisconnected packet = msg.Read<Packet_PlayerDisconnected>();
             if (LocalManager.players.TryGetValue(packet.Id, out LocalPlayer player))
             {
-                MsgDrawer.main.Log($"'{player.username}' disconnected.");
+                MsgDrawer.main.Log($"'{player.username}' disconnected");
                 LocalManager.players.Remove(packet.Id);
             }
         }

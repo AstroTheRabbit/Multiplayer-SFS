@@ -1,58 +1,64 @@
 using System;
 using System.Linq;
+using System.Timers;
 using System.Collections.Generic;
 using HarmonyLib;
+using UnityEngine;
+using SFS.UI;
 using SFS.Parts;
 using SFS.World;
-using UnityEngine;
-using MultiplayerSFS.Common;
-using SFS.UI;
 using SFS.Variables;
+using ModLoader.Helpers;
+using MultiplayerSFS.Common;
+using Object = UnityEngine.Object;
 
 namespace MultiplayerSFS.Mod
 {
-    public class LocalManager : MonoBehaviour
+    public class LocalManager
     {
-        static LocalManager main;
         public static Dictionary<int, LocalPlayer> players;
         public static Dictionary<int, LocalRocket> syncedRockets;
         public static HashSet<int> unsyncedRockets;
         /// <summary>
         /// The local id of the rocket that this player should be controlling after their launched rockets has been synced with the server.
         /// </summary>
-        public static int unsyncedToControl;
         public static HashSet<int> updateAuthority;
+        public static int unsyncedToControl;
+
+        public static double updateRocketsPeriod = 20;
+        public static Timer updateTimer;
         
         static Rocket RocketPrefab => AccessTools.StaticFieldRefAccess<Rocket>(typeof(RocketManager), "prefab");
-        
-        public const int UPDATE_TICKS = 5;
-        public static int current_ticks = 0;
 
         public static void Initialize()
         {
-            if (main == null)
+            if (updateTimer == null)
             {
-                GameObject go = new GameObject("MultiplayerSFS - Local Manager");
-                DontDestroyOnLoad(go);
-                main = go.AddComponent<LocalManager>();
-
                 players = new Dictionary<int, LocalPlayer>();
                 syncedRockets = new Dictionary<int, LocalRocket>();
                 unsyncedRockets = new HashSet<int>();
-                unsyncedToControl = -1;
                 updateAuthority = new HashSet<int>();
+                unsyncedToControl = -1;
+
+                updateTimer = new Timer()
+                {
+                    Interval = updateRocketsPeriod,
+                    AutoReset = true,
+					Enabled = true,
+                };
+                updateTimer.Elapsed += (object source, ElapsedEventArgs e) => SendUpdatePackets();
+                SceneHelper.OnHomeSceneLoaded += DisableUpdateTimer;
             }
         }
 
-        void Update()
+        public static void DisableUpdateTimer()
         {
-            // TODO: This tick counting method is kinda silly; should be replaced with a seperate update cycle that isn't determined by the game's FPS.
-            if (current_ticks > 0)
-            {
-                current_ticks--;
-                return;
-            }
-            current_ticks = UPDATE_TICKS;
+            updateTimer?.Close();
+            SceneHelper.OnHomeSceneLoaded -= DisableUpdateTimer;
+        }
+
+        public static void SendUpdatePackets()
+        {
             foreach (int id in updateAuthority)
             {
                 if (syncedRockets.TryGetValue(id, out LocalRocket localRocket) && localRocket.rocket is Rocket rocket)
@@ -71,6 +77,7 @@ namespace MultiplayerSFS.Mod
                             ThrottlePercent = rocket.throttle.throttlePercent,
                             ThrottleOn = rocket.throttle.throttleOn,
                             RCS = rocket.arrowkeys.rcs,
+                            Location = new WorldSave.LocationData(rocket.location.Value),
                         }
                     );
                 }
@@ -107,13 +114,16 @@ namespace MultiplayerSFS.Mod
                 syncedRockets.Add(packet.GlobalId, rocket);
                 if (packet.LocalId == unsyncedToControl)
                 {
+                    unsyncedToControl = -1;
                     PlayerController.main.player.Value = rocket.rocket;
                     GameCamerasManager.main.InstantlyRotateCamera();
-
-                    unsyncedToControl = -1;
-                    ClientManager.SendPacket(new Packet_UpdatePlayerControl() { PlayerId = ClientManager.playerId, RocketId = packet.GlobalId });
                     // * This loading screen is opened in the `SceneLoader_LoadWorldScene` patch.
                     Menu.loading.Close();
+                }
+                if (packet.GlobalId == players[ClientManager.playerId].currentRocket)
+                {
+                    // * Complete resync was sent for this client's rocket.
+                    PlayerController.main.player.Value = rocket.rocket;
                 }
             }
         }
@@ -122,7 +132,7 @@ namespace MultiplayerSFS.Mod
         public static LocalRocket SpawnLocalRocket(RocketState state)
         {
             Dictionary<int, Part> parts = SpawnLocalParts(state);
-            Rocket rocket = Instantiate(RocketPrefab);
+            Rocket rocket = Object.Instantiate(RocketPrefab);
             rocket.rocketName = state.rocketName;
             rocket.throttle.throttleOn.Value = state.throttleOn;
             rocket.throttle.throttlePercent.Value = state.throttlePercent;

@@ -1,6 +1,5 @@
 using System;
 using System.Net;
-using System.Threading;
 using UnityEngine;
 using SFS.UI;
 using SFS.Input;
@@ -32,7 +31,6 @@ namespace MultiplayerSFS.Mod
         TextInput input_port;
         TextInput input_username;
         TextInput input_password;
-        readonly CancellationTokenSource connectCancelToken = new CancellationTokenSource();
 
         public static void OpenMenu() {
             windowHolder = Builder.CreateHolder(Builder.SceneToAttach.CurrentScene, "MultiplayerSFS - Join Menu Holder");
@@ -46,7 +44,7 @@ namespace MultiplayerSFS.Mod
             {
                 ScreenManager.main.OpenScreen(() => this);
                 windowHolder.SetActive(true);
-                Patches.multiplayerEnabled.Value = true;
+                ClientManager.multiplayerEnabled.Value = true;
                 window = Builder.CreateWindow(
                     windowHolder.transform,
                     windowID,
@@ -67,7 +65,7 @@ namespace MultiplayerSFS.Mod
         {
             if (ScreenManager.main.CurrentScreen == this && windowHolder != null)
             {
-                Patches.multiplayerEnabled.Value = false;
+                ClientManager.multiplayerEnabled.Value = false;
                 ScreenManager.main.CloseCurrent();
                 windowHolder.SetActive(false);
             }
@@ -156,25 +154,24 @@ namespace MultiplayerSFS.Mod
                 if (!IPAddress.TryParse(input_address.Text, out IPAddress _))
                 {
                     input_address.FieldColor = Color.red;
-                    MsgDrawer.main.Log("IP address is invalid.");
+                    MsgDrawer.main.Log("IP address is invalid");
                     return;
                 }
                 if (!(int.TryParse(input_port.Text, out int n_port) && n_port > 0))
                 {
                     input_port.FieldColor = Color.red;
-                    MsgDrawer.main.Log("Port is invalid.");
+                    MsgDrawer.main.Log("Port is invalid");
                     return;
                 }
                 if (string.IsNullOrWhiteSpace(input_username.Text))
                 {
                     input_username.FieldColor = Color.red;
-                    MsgDrawer.main.Log("Username cannot be empty.");
+                    MsgDrawer.main.Log("Username cannot be empty");
                     return;
                 }
                 MsgDrawer.main.Log("Attempting to connect...");
-
                 
-                await ClientManager.TryConnect(joinInfo, connectCancelToken.Token);
+                await ClientManager.TryConnect(joinInfo);
             }
             catch (Exception e)
             {
@@ -185,7 +182,7 @@ namespace MultiplayerSFS.Mod
                 else
                 {
                     MsgDrawer.main.Log("An error occured... (Check console)");
-                    Debug.Log(e);
+                    Debug.LogError(e);
                 }
             }
         }

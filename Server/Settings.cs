@@ -35,12 +35,19 @@ namespace MultiplayerSFS.Server
 		/// <summary>
 		/// A time (in seconds) after which the server will send `UpdatePlayerAuthority` packets to each player.
 		/// These 'authorities' are used to determine which player must provide update information (location, throttle, etc) for certain rockets.
-		/// It's generally recommended to keep this value low, but too low can lower players' FPS or even crash SFS.
+		/// It's generally recommended to keep this value low, but too low can lower players' FPS.
 		/// </summary>
 		public double updateAuthoritiesPeriod = 10;
 
 		/// <summary>
-		/// Distance (squared) used to determine if a player should be given 'update authority' of a near-by rocket.
+		/// A time (in milliseconds) after which connected clients will send `UpdateRocket` packets to the server.
+		/// It's generally recommended to keep this value low (a value that is too high will make rockets noticable 'jitter' around),
+		/// but too low can lower players' FPS.
+		/// </summary>
+		public double updateRocketsPeriod = 20;
+
+		/// <summary>
+		/// Distance (squared) used to determine if a player should be given 'update authority' of a nearby rocket.
 		/// Should always be set above the game's current (un)load distance (1.2 * 5000 iirc).
 		/// </summary>
 		public double sqrLoadRange = 7500 * 7500;

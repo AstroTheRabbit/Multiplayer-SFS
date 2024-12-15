@@ -109,14 +109,16 @@ namespace MultiplayerSFS.Common
     }
     public class Packet_JoinResponse : Packet
     {
+        public int PlayerId { get; set; }
+        public double UpdateRocketsPeriod { get; set; }
         public double WorldTime { get; set; }
         public Difficulty.DifficultyType Difficulty { get; set; }
-        public int PlayerId { get; set; }
 
         public override PacketType Type => PacketType.JoinResponse;
         public override void Serialize(NetOutgoingMessage msg)
         {
             msg.Write(PlayerId);
+            msg.Write(UpdateRocketsPeriod);
             msg.Write(WorldTime);
             msg.Write((byte) Difficulty);
         }
@@ -124,6 +126,7 @@ namespace MultiplayerSFS.Common
         public override void Deserialize(NetIncomingMessage msg)
         {
             PlayerId = msg.ReadInt32();
+            UpdateRocketsPeriod = msg.ReadDouble();
             WorldTime = msg.ReadDouble();
             Difficulty = (Difficulty.DifficultyType) msg.ReadByte();
         }

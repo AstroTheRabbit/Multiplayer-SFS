@@ -30,7 +30,6 @@ namespace MultiplayerSFS.Server
 			npc.EnableMessageType(NetIncomingMessageType.StatusChanged);
 			npc.EnableMessageType(NetIncomingMessageType.ConnectionApproval);
 			npc.EnableMessageType(NetIncomingMessageType.ConnectionLatencyUpdated);
-			
 			npc.EnableMessageType(NetIncomingMessageType.VerboseDebugMessage);
 
 			world = new WorldState(settings.worldSavePath);
@@ -38,13 +37,9 @@ namespace MultiplayerSFS.Server
 
 			if (settings.completeResyncPeriod > 0)
 			{
-				resyncTimer = new Timer(1000 * settings.completeResyncPeriod)
-				{
-					AutoReset = true,
-					Enabled = true,
-
-				};
+				resyncTimer = new Timer(1000 * settings.completeResyncPeriod);
 				resyncTimer.Elapsed += (object source, ElapsedEventArgs e) => OnCompleteResync();
+				resyncTimer.Enabled = true;
 			}
 
 			if (settings.updateAuthoritiesPeriod <= 0)
@@ -52,12 +47,9 @@ namespace MultiplayerSFS.Server
 				Logger.Error("The setting `updateAuthoritiesPeriod` cannot be less than or equal to 0!");
 				return;
 			}
-			authorityTimer = new Timer(1000 * settings.updateAuthoritiesPeriod)
-			{
-				AutoReset = true,
-				Enabled = true,
-			};
+			authorityTimer = new Timer(1000 * settings.updateAuthoritiesPeriod);
 			authorityTimer.Elapsed += (object source, ElapsedEventArgs e) => UpdatePlayerAuthorities();
+			authorityTimer.Enabled = true;
 
             server = new NetServer(npc);
 			server.Start();
@@ -72,7 +64,6 @@ namespace MultiplayerSFS.Server
 				while (true)
 				{
 					Listen();
-					// UpdatePlayerAuthorities();
 				}
 			}
 			catch (Exception e)
@@ -100,7 +91,7 @@ namespace MultiplayerSFS.Server
 
 					case NetIncomingMessageType.DebugMessage:
 					case NetIncomingMessageType.VerboseDebugMessage:
-						Logger.Debug($"Lidgren Debug - \"{msg.ReadString()}\".");
+						Logger.Info($"Lidgren Debug - \"{msg.ReadString()}\".", true);
 						break;
 					case NetIncomingMessageType.WarningMessage:
 						Logger.Warning($"Lidgren Warning - \"{msg.ReadString()}\".");
@@ -191,17 +182,17 @@ namespace MultiplayerSFS.Server
 			}
 			if (string.IsNullOrWhiteSpace(request.Username))
 			{
-				reason = $"Username cannot be empty.";
+				reason = $"Username cannot be empty";
 				goto ConnectionDenied;
 			}
 			if (settings.blockDuplicatePlayerNames && connectedPlayers.Values.Select((ConnectedPlayer player) => player.username).Contains(request.Username))
 			{
-				reason = $"Username {request.Username} is already in use.";
+				reason = $"Username '{request.Username}' is already in use";
 				goto ConnectionDenied;
 			}
 			if (request.Password != settings.password && settings.password != "")
 			{
-				reason = $"Invalid password.";
+				reason = $"Invalid password";
 				goto ConnectionDenied;
 			}
 
@@ -216,6 +207,7 @@ namespace MultiplayerSFS.Server
 				new Packet_JoinResponse()
 				{
 					PlayerId = newPlayer.id,
+					UpdateRocketsPeriod = settings.updateAuthoritiesPeriod,
 					WorldTime = world.worldTime,
 					Difficulty = world.difficulty,
 				}
@@ -382,8 +374,8 @@ namespace MultiplayerSFS.Server
 
         static void OnIncomingPacket(NetIncomingMessage msg)
         {
-			// Logger.Debug($"Packet Bits: {msg.LengthBits}");
             PacketType packetType = (PacketType) msg.ReadByte();
+			// Logger.Debug($"Packet Bits: {msg.LengthBits}");
 			// Logger.Debug($"Recieved packet of type '{packetType}'.");
 			switch (packetType)
 			{
@@ -431,6 +423,7 @@ namespace MultiplayerSFS.Server
 						packet,
 						msg.SenderConnection
 					);
+					UpdatePlayerAuthorities();
 				}
 				else
 				{
@@ -453,7 +446,8 @@ namespace MultiplayerSFS.Server
 		static void OnPacket_DestroyRocket(NetIncomingMessage msg)
 		{
 			Packet_DestroyRocket packet = msg.Read<Packet_DestroyRocket>();
-			SendPacketToAll(packet);
+			if (world.rockets.Remove(packet.Id))
+				SendPacketToAll(packet, msg.SenderConnection);
 		}
 
 		static void OnPacket_UpdateRocket(NetIncomingMessage msg)
