@@ -103,6 +103,21 @@ namespace MultiplayerSFS.Mod
             }
         }
 
+        /// <summary>
+        /// Returns the id of the provided part on the rocket with the provided id, otherwise returns -1 if not found.
+        /// </summary>
+        public static int GetLocalPartID(int rocketId, Part part)
+        {
+            try
+            {
+                return syncedRockets[rocketId].parts.First((KeyValuePair<int, Part> kvp) => kvp.Value == part).Key;
+            }
+            catch (InvalidOperationException)
+            {
+                return -1;
+            }
+        }
+
         public static void CreateRocket(Packet_CreateRocket packet)
         {
             unsyncedRockets.Remove(packet.LocalId);
@@ -210,6 +225,18 @@ namespace MultiplayerSFS.Mod
                 rocket.rocket.throttle.throttlePercent.Value = packet.ThrottlePercent;
                 rocket.rocket.throttle.throttleOn.Value = packet.ThrottleOn;
                 rocket.rocket.physics.SetLocationAndState(packet.Location.GetSaveLocation(WorldTime.main.worldTime), true);
+            }
+        }
+
+        public static void DestroyLocalPart(Packet_DestroyPart packet)
+        {
+            if (syncedRockets.TryGetValue(packet.RocketId, out LocalRocket rocket) && rocket.rocket != null)
+            {
+                if (rocket.parts.TryGetValue(packet.PartId, out Part localPart) && localPart != null)
+                {
+                    // ? This mod uses `(DestructionReason) 4` as a way to signal that the server has told the client to destroy this part.
+                    localPart.DestroyPart(packet.CreateExplosion, true, (DestructionReason) 4);
+                }
             }
         }
     }

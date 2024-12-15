@@ -130,6 +130,16 @@ namespace MultiplayerSFS.Common
             stages = save.stages.Select((StageSave stage) => new StageState(stage, partIndexToID)).ToList();
         }
 
+        /// <summary>
+        /// Returns true if the part was found and removed, otherwise returns false.
+        /// </summary>
+        public bool RemovePart(int id)
+        {
+            bool found = parts.Remove(id);
+            // TODO: Need to think of a good way to update & sync joints/stages that contained the destroyed part.
+            return found;
+        }
+
         public void Serialize(NetOutgoingMessage msg)
         {
             msg.Write(rocketName);

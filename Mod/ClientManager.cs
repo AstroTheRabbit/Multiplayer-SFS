@@ -206,12 +206,10 @@ namespace MultiplayerSFS.Mod
                     OnPacket_UpdateRocket(msg);
                     break;
 
-                // // * Part packets
-                // case PacketType.ActivatePart: // ! TODO
-                //     OnPacket_ActivatePart(msg);
-                //     break;
-                // case PacketType.DestroyPart: // ! TODO
-                //     break;
+                // * Part packets
+                case PacketType.DestroyPart:
+                    OnPacket_DestroyPart(msg);
+                    break;
                 
                 // // * Staging Packets
                 // case PacketType.CreateStage: // ! TODO
@@ -320,14 +318,14 @@ namespace MultiplayerSFS.Mod
             }
         }
 
-        // ! TODO: Part activation - this is probably where nearly all of my problems regarding syncing etc will come from, since the vanilla part activation is quite complex (especially staging!)
-        // public static void OnPacket_ActivatePart(NetIncomingMessage msg)
-        // {
-        //     Packet_ActivatePart packet = msg.Read<Packet_ActivatePart>();
-        //     if (GameManager.main != null)
-        //     {
-        //         LocalManager.ActivateLocalPart(packet);
-        //     }
-        // }
+        static void OnPacket_DestroyPart(NetIncomingMessage msg)
+        {
+            Packet_DestroyPart packet = msg.Read<Packet_DestroyPart>();
+            if (world.rockets.TryGetValue(packet.RocketId, out RocketState state))
+            {
+                state.RemovePart(packet.PartId);
+                LocalManager.DestroyLocalPart(packet);
+            }
+        }
     }
 }

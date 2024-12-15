@@ -129,7 +129,7 @@ namespace MultiplayerSFS.Mod.Patches
 
             /// <summary>
             /// An altered version of `RocketManager.SpawnBlueprint` that instead returns a `List<RocketState>`.
-            /// I would use a patched version of the original, but it relies on the world scene being loaded to use the rocket prefab.
+            /// I would use a patched version of the original, but that relies on the rocket prefab which is only loaded in the world scene.
             /// </summary>
             static List<RocketState> BlueprintToRocketStates(Blueprint blueprint)
             {
@@ -200,7 +200,7 @@ namespace MultiplayerSFS.Mod.Patches
         }
 
         /// <summary>
-        /// Reverse patch of `RocketManager.GetSpawnLocation` so it can be called in `SceneLoader_LoadWorldScene.SpawnBlueprint`.
+        /// Reverse patch of `RocketManager.GetSpawnLocation`, so it can be called in `SceneLoader_LoadWorldScene.SpawnBlueprint`.
         /// </summary>
         [HarmonyPatch(typeof(RocketManager), "GetSpawnLocation")]
         public class RocketManager_GetSpawnLocation
@@ -209,6 +209,50 @@ namespace MultiplayerSFS.Mod.Patches
             public static Location GetSpawnLocation(JointGroup group)
             {
                 throw new NotImplementedException("Reverse patch error!");
+            }
+        }
+
+        /// <summary>
+        /// Prevents the destruction of a part in multiplayer if this client doesn't have update authority over the part's rocket.
+        /// If the client does have update authority, this patch also sends a `DestroyPart` packet to the server.
+        /// </summary>
+        [HarmonyPatch(typeof(Part), nameof(Part.DestroyPart))]
+        public class Part_DestroyPart
+        {
+            public static bool Prefix(Part __instance, bool createExplosion, bool updateJoints, DestructionReason reason)
+            {
+                if (ClientManager.multiplayerEnabled && GameManager.main != null)
+                {
+                    int rocketId = LocalManager.GetLocalRocketID(__instance.Rocket);
+                    if (rocketId == -1)
+                    {
+                        // * This part's rocket isn't synced, so we won't destroy it.
+                        return false;
+                    }
+                    int partId = LocalManager.GetLocalPartID(rocketId, __instance);
+                    if (partId == -1)
+                    {
+                        Debug.LogError("Couldn't find existing part!");
+                        return false;
+                    }
+                    if (LocalManager.updateAuthority.Contains(rocketId))
+                    {
+                        // * This client has update authority over the destroyed part's rocket.
+                        ClientManager.SendPacket
+                        (
+                            new Packet_DestroyPart()
+                            {
+                                RocketId = rocketId,
+                                PartId = partId,
+                                CreateExplosion = createExplosion,
+                            }
+                        );
+                        return true;
+                    }
+                    // ? This mod uses `(DestructionReason) 4` as a way to signal that the server has told the client to destroy this part.
+                    return reason == (DestructionReason) 4;
+                }
+                return true;
             }
         }
     }

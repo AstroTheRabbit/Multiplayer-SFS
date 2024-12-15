@@ -310,17 +310,20 @@ namespace MultiplayerSFS.Common
     {
         public int RocketId { get; set; }
         public int PartId { get; set; }
+        public bool CreateExplosion { get; set; }
 
         public override PacketType Type => PacketType.DestroyPart;
         public override void Serialize(NetOutgoingMessage msg)
         {
             msg.Write(RocketId);
             msg.Write(PartId);
+            msg.Write(CreateExplosion);
         }
         public override void Deserialize(NetIncomingMessage msg)
         {
             RocketId = msg.ReadInt32();
             PartId = msg.ReadInt32();
+            CreateExplosion = msg.ReadBoolean();
         }
     }
 

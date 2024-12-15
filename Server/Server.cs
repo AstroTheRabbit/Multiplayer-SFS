@@ -392,6 +392,10 @@ namespace MultiplayerSFS.Server
 				case PacketType.UpdateRocket:
 					OnPacket_UpdateRocket(msg);
 					break;
+
+				case PacketType.DestroyPart:
+					OnPacket_DestroyPart(msg);
+					break;
 				
 				case PacketType.JoinRequest:
 					Logger.Warning("Recieved join request outside of connection attempt.");
@@ -466,6 +470,16 @@ namespace MultiplayerSFS.Server
                 state.RCS = packet.RCS;
                 state.location = packet.Location;
 				SendPacketToAll(packet, msg.SenderConnection);
+			}
+		}
+
+		static void OnPacket_DestroyPart(NetIncomingMessage msg)
+		{
+			Packet_DestroyPart packet = msg.Read<Packet_DestroyPart>();
+			if (world.rockets.TryGetValue(packet.RocketId, out RocketState state))
+			{
+				if (state.RemovePart(packet.PartId))
+					SendPacketToAll(packet, msg.SenderConnection);
 			}
 		}
 	}
