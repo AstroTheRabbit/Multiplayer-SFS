@@ -130,14 +130,37 @@ namespace MultiplayerSFS.Common
             stages = save.stages.Select((StageSave stage) => new StageState(stage, partIndexToID)).ToList();
         }
 
+        public void UpdateRocket(Packet_UpdateRocket packet)
+        {
+            input_Turn = packet.Input_Turn;
+            input_Raw = packet.Input_Raw;
+            input_Horizontal = packet.Input_Horizontal;
+            input_Vertical = packet.Input_Vertical;
+            rotation = packet.Rotation;
+            angularVelocity = packet.AngularVelocity;
+            throttlePercent = packet.ThrottlePercent;
+            throttleOn = packet.ThrottleOn;
+            RCS = packet.RCS;
+            location = packet.Location;
+        }
+
+        /// <summary>
+        /// Returns true if the part was found and updated, otherwise returns false.
+        /// </summary>
+        public bool UpdatePart(int id, PartState newPart)
+        {
+            bool found = parts.Remove(id);
+            parts.Add(id, newPart);
+            return found;
+        }
+
         /// <summary>
         /// Returns true if the part was found and removed, otherwise returns false.
         /// </summary>
         public bool RemovePart(int id)
         {
-            bool found = parts.Remove(id);
             // TODO: Need to think of a good way to update & sync joints/stages that contained the destroyed part.
-            return found;
+            return parts.Remove(id);
         }
 
         public void Serialize(NetOutgoingMessage msg)

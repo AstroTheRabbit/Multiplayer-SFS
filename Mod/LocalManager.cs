@@ -11,6 +11,8 @@ using SFS.Variables;
 using ModLoader.Helpers;
 using MultiplayerSFS.Common;
 using Object = UnityEngine.Object;
+using MultiplayerSFS.Mod.Patches;
+using SFS.Parts.Modules;
 
 namespace MultiplayerSFS.Mod
 {
@@ -63,27 +65,33 @@ namespace MultiplayerSFS.Mod
             {
                 if (syncedRockets.TryGetValue(id, out LocalRocket localRocket) && localRocket.rocket is Rocket rocket)
                 {
-                    ClientManager.SendPacket
-                    (
-                        new Packet_UpdateRocket()
-                        {
-                            Id = id,
-                            Input_Turn = rocket.arrowkeys.turnAxis,
-                            Input_Raw = rocket.arrowkeys.rawArrowkeysAxis,
-                            Input_Horizontal = rocket.arrowkeys.horizontalAxis,
-                            Input_Vertical = rocket.arrowkeys.verticalAxis,
-                            Rotation = rocket.rb2d.transform.eulerAngles.z,
-                            AngularVelocity = rocket.rb2d.angularVelocity,
-                            ThrottlePercent = rocket.throttle.throttlePercent,
-                            ThrottleOn = rocket.throttle.throttleOn,
-                            RCS = rocket.arrowkeys.rcs,
-                            Location = new WorldSave.LocationData(rocket.location.Value),
-                        }
-                    );
+                    var packet = new Packet_UpdateRocket()
+                    {
+                        Id = id,
+                        Input_Turn = rocket.arrowkeys.turnAxis,
+                        Input_Raw = rocket.arrowkeys.rawArrowkeysAxis,
+                        Input_Horizontal = rocket.arrowkeys.horizontalAxis,
+                        Input_Vertical = rocket.arrowkeys.verticalAxis,
+                        Rotation = rocket.rb2d.transform.eulerAngles.z,
+                        AngularVelocity = rocket.rb2d.angularVelocity,
+                        ThrottlePercent = rocket.throttle.throttlePercent,
+                        ThrottleOn = rocket.throttle.throttleOn,
+                        RCS = rocket.arrowkeys.rcs,
+                        Location = new WorldSave.LocationData(rocket.location.Value),
+                    };
+                    if (ClientManager.world.rockets.TryGetValue(id, out RocketState state))
+                    {
+                        state.UpdateRocket(packet);
+                    }
+                    else
+                    {
+                        Debug.LogError("Missing rocket state while trying to send update packets!");
+                    }
+                    ClientManager.SendPacket(packet);
                 }
                 else
                 {
-                    Debug.LogError("Missing local rocket while try to send update packets!");
+                    Debug.LogError("Missing local rocket while trying to send update packets!");
                 }
             }
         }
@@ -163,6 +171,7 @@ namespace MultiplayerSFS.Mod
             rocket.SetJointGroup(new JointGroup(joints, parts.Values.ToList()));
 
             rocket.rb2d.transform.eulerAngles = new Vector3(0f, 0f, state.rotation);
+            
             rocket.physics.SetLocationAndState(state.location.GetSaveLocation(WorldTime.main.worldTime), true);
             rocket.rb2d.angularVelocity = state.angularVelocity;
 
@@ -179,10 +188,15 @@ namespace MultiplayerSFS.Mod
             Dictionary<int, Part> result = new Dictionary<int, Part>(state.parts.Count);
             foreach (KeyValuePair<int, PartState> kvp in state.parts)
             {
-                Part part = PartsLoader.CreatePart(kvp.Value.part, null, null, OnPartNotOwned.Allow, out _);
+                Part part = SpawnLocalPart(kvp.Value);
                 result.Add(kvp.Key, part);
             }
             return result;
+        }
+
+        static Part SpawnLocalPart(PartState part, Transform holder = null)
+        {
+            return PartsLoader.CreatePart(part.part, holder, null, OnPartNotOwned.Allow, out _);
         }
 
         static void DestroyLocalRocket(int id, DestructionReason reason = DestructionReason.Intentional)
@@ -228,12 +242,78 @@ namespace MultiplayerSFS.Mod
             }
         }
 
+        public static void UpdateLocalPart(Packet_UpdatePart packet)
+        {
+            if (syncedRockets.TryGetValue(packet.RocketId, out LocalRocket localRocket) && localRocket.rocket is Rocket rocket)
+            {
+                if (localRocket.parts.TryGetValue(packet.PartId, out Part oldPart) && oldPart != null)
+                {
+                    Part newPart = SpawnLocalPart(packet.NewPart, oldPart.transform.parent);
+
+                    localRocket.parts[packet.PartId] = newPart;
+
+                    // ? Most of the following is a loose recreation of `Rocket.SetParts`, but instead for updating a single part.
+                    // ? Methods like `PartHolder.AddParts` and `PartHolder.RemoveParts` have to be avoided,
+                    // ? since they act as if the part is completely new and not a recreation of an existing part.
+
+                    // * Update the part holder of the `rocket`.
+                    rocket.partHolder.parts.Remove(oldPart);
+                    rocket.partHolder.partsSet.Remove(oldPart);
+                    rocket.partHolder.parts.Add(newPart);
+                    rocket.partHolder.partsSet.Add(newPart);
+
+                    rocket.partHolder.FieldRef<Part[]>("cachedArray") = null;
+                    rocket.partHolder.FieldRef<Dictionary<string, object>>("modules").Clear();
+                    rocket.partHolder.FieldRef<Dictionary<string, int>>("moduleCount").Clear();
+
+                    // * Update joints containing `oldPart`.
+                    foreach (PartJoint joint in rocket.jointsGroup.GetConnectedJoints(oldPart))
+                    {
+                        if (joint.a == oldPart)
+                            rocket.jointsGroup.AddJoint(new PartJoint(newPart, joint.b, joint.anchor));
+                        else
+                            rocket.jointsGroup.AddJoint(new PartJoint(joint.a, newPart, joint.anchor));
+                    }
+                    rocket.jointsGroup.RemovePartAndItsJoints(oldPart);
+
+                    // * Update stages containing `oldPart`.
+                    foreach (Stage stage in rocket.staging.stages)
+                    {
+                        if (stage.parts.Contains(oldPart))
+                        {
+                            stage.RemovePart(oldPart, false);
+                            stage.AddPart(newPart, false, false);
+                        }
+                    }
+
+                    rocket.FieldRef<List<(ResourceModule[], ResourceModule)>>("pipeFlows").Clear();
+
+                    oldPart.DestroyPart(false, false, (DestructionReason) 4);
+
+                    WorldEventSyncing.Rocket_InjectPartDependencies.InjectPartDependencies(rocket);
+                    rocket.rb2d.mass = rocket.mass.GetMass();
+	                rocket.rb2d.centerOfMass = rocket.mass.GetCenterOfMass();
+
+                    // TODO: Various bits of code related to flow and resource modules, docking ports, etc may need to be added, idk.
+                }
+                else
+                {
+                    Debug.LogError("Missing local part when trying to update part!");
+                }
+            }
+            else
+            {
+                Debug.LogError("Missing local rocket when trying to update part!");
+            }
+        }
+
         public static void DestroyLocalPart(Packet_DestroyPart packet)
         {
             if (syncedRockets.TryGetValue(packet.RocketId, out LocalRocket rocket) && rocket.rocket != null)
             {
                 if (rocket.parts.TryGetValue(packet.PartId, out Part localPart) && localPart != null)
                 {
+                    Debug.Log($"Destroyed part {packet.RocketId}:{packet.PartId}");
                     // ? This mod uses `(DestructionReason) 4` as a way to signal that the server has told the client to destroy this part.
                     localPart.DestroyPart(packet.CreateExplosion, true, (DestructionReason) 4);
                 }

@@ -213,6 +213,19 @@ namespace MultiplayerSFS.Mod.Patches
         }
 
         /// <summary>
+        /// Reverse patch of `Rocket.InjectPartDependencies`, so it can be called in `LocalManager.UpdateLocalPart`.
+        /// </summary>
+        [HarmonyPatch(typeof(Rocket), "InjectPartDependencies")]
+        public class Rocket_InjectPartDependencies
+        {
+            [HarmonyReversePatch]
+            public static void InjectPartDependencies(Rocket rocket)
+            {
+                throw new NotImplementedException("Reverse patch error!");
+            }
+        }
+
+        /// <summary>
         /// Prevents the destruction of a part in multiplayer if this client doesn't have update authority over the part's rocket.
         /// If the client does have update authority, this patch also sends a `DestroyPart` packet to the server.
         /// </summary>
@@ -223,6 +236,12 @@ namespace MultiplayerSFS.Mod.Patches
             {
                 if (ClientManager.multiplayerEnabled && GameManager.main != null)
                 {
+                    if (reason == (DestructionReason) 4)
+                    {
+                        // * This part was intentionally destroyed by the server (e.g. another player's rocket crashed).
+                        return true;
+                    }
+
                     int rocketId = LocalManager.GetLocalRocketID(__instance.Rocket);
                     if (rocketId == -1)
                     {
@@ -232,7 +251,7 @@ namespace MultiplayerSFS.Mod.Patches
                     int partId = LocalManager.GetLocalPartID(rocketId, __instance);
                     if (partId == -1)
                     {
-                        Debug.LogError("Couldn't find existing part!");
+                        Debug.LogError("Couldn't find destroyed part's id!");
                         return false;
                     }
                     if (LocalManager.updateAuthority.Contains(rocketId))
@@ -253,6 +272,35 @@ namespace MultiplayerSFS.Mod.Patches
                     return reason == (DestructionReason) 4;
                 }
                 return true;
+            }
+        }
+
+        /// <summary>
+        /// Sends `UpdatePart` packets after each part has been used.
+        /// </summary>
+        [HarmonyPatch(typeof(Rocket), nameof(Rocket.UseParts))]
+        public class Rocket_UseParts
+        {
+            public static void Postfix((Part, PolygonData)[] regions)
+            {
+                foreach ((Part part, PolygonData _) in regions)
+                {
+                    // * I don't think this needs a check to ensure the rocket is under this client's authority,
+                    // * since (at least in vanilla) parts can't be activated by a rocket that isn't currently controlled.
+
+                    int rocketId = LocalManager.GetLocalRocketID(part.Rocket);
+                    int partId = LocalManager.GetLocalPartID(rocketId, part);
+                    PartState state = new PartState(new PartSave(part));
+                    ClientManager.SendPacket
+                    (
+                        new Packet_UpdatePart()
+                        {
+                            RocketId = rocketId,
+                            PartId = partId,
+                            NewPart = state
+                        }
+                    );
+                }
             }
         }
     }

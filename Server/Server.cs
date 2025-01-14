@@ -393,6 +393,9 @@ namespace MultiplayerSFS.Server
 					OnPacket_UpdateRocket(msg);
 					break;
 
+				case PacketType.UpdatePart:
+					OnPacket_UpdatePart(msg);
+					break;
 				case PacketType.DestroyPart:
 					OnPacket_DestroyPart(msg);
 					break;
@@ -459,17 +462,18 @@ namespace MultiplayerSFS.Server
 			Packet_UpdateRocket packet = msg.Read<Packet_UpdateRocket>();
 			if (world.rockets.TryGetValue(packet.Id, out RocketState state))
 			{
-				state.input_Turn = packet.Input_Turn;
-                state.input_Raw = packet.Input_Raw;
-                state.input_Horizontal = packet.Input_Horizontal;
-                state.input_Vertical = packet.Input_Vertical;
-                state.rotation = packet.Rotation;
-                state.angularVelocity = packet.AngularVelocity;
-                state.throttlePercent = packet.ThrottlePercent;
-                state.throttleOn = packet.ThrottleOn;
-                state.RCS = packet.RCS;
-                state.location = packet.Location;
+				state.UpdateRocket(packet);
 				SendPacketToAll(packet, msg.SenderConnection);
+			}
+		}
+
+		static void OnPacket_UpdatePart(NetIncomingMessage msg)
+		{
+			Packet_UpdatePart packet = msg.Read<Packet_UpdatePart>();
+			if (world.rockets.TryGetValue(packet.RocketId, out RocketState state))
+			{
+				if (state.UpdatePart(packet.PartId, packet.NewPart))
+					SendPacketToAll(packet, msg.SenderConnection);
 			}
 		}
 

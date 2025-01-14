@@ -48,7 +48,7 @@ namespace MultiplayerSFS.Common
         /// </summary>
         UpdateRocket,
 
-        // * Part packets
+        // * Part/staging packets
         /// <summary>
         /// Sent whenever a part has changed state - staging, manual activation, etc.
         /// </summary>
@@ -57,29 +57,7 @@ namespace MultiplayerSFS.Common
         /// Sent whenever a part is destroyed.
         /// </summary>
         DestroyPart,
-        
-        // * Staging Packets
-        // TODO: Maybe replace with a general `UpdateStaging` packet?
-        /// <summary>
-        /// Sent whenever a stage has been created.
-        /// </summary>
-        CreateStage,
-        /// <summary>
-        /// Sent whenever a stage has been removed (including activation, which also sends <c>Server_ActivateParts</c> for each part of that stage).
-        /// </summary>
-        RemoveStage,
-        /// <summary>
-        /// Sent whenever a part is added to a stage.
-        /// </summary>
-        AddPartToStage,
-        /// <summary>
-        /// Sent whenever a part is removed from a stage.
-        /// </summary>
-        RemovePartFromStage,
-        /// <summary>
-        /// Sent whenever the order of a rocket's stages has been changed.
-        /// </summary>
-        ReorderStage,
+        // UpdateStaging
     }
 
     public abstract class Packet : INetData
@@ -290,20 +268,20 @@ namespace MultiplayerSFS.Common
     {
         public int RocketId { get; set; }
         public int PartId { get; set; }
-        public PartState Part { get; set; }
+        public PartState NewPart { get; set; }
 
         public override PacketType Type => PacketType.UpdatePart;
         public override void Serialize(NetOutgoingMessage msg)
         {
             msg.Write(RocketId);
             msg.Write(PartId);
-            msg.Write(Part);
+            msg.Write(NewPart);
         }
         public override void Deserialize(NetIncomingMessage msg)
         {
             RocketId = msg.ReadInt32();
             PartId = msg.ReadInt32();
-            Part = msg.Read<PartState>();
+            NewPart = msg.Read<PartState>();
         }
     }
     public class Packet_DestroyPart : Packet
