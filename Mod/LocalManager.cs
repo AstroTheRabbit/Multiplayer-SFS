@@ -8,11 +8,11 @@ using SFS.UI;
 using SFS.Parts;
 using SFS.World;
 using SFS.Variables;
+using SFS.Parts.Modules;
 using ModLoader.Helpers;
 using MultiplayerSFS.Common;
-using Object = UnityEngine.Object;
 using MultiplayerSFS.Mod.Patches;
-using SFS.Parts.Modules;
+using Object = UnityEngine.Object;
 
 namespace MultiplayerSFS.Mod
 {
@@ -20,7 +20,7 @@ namespace MultiplayerSFS.Mod
     {
         public static Dictionary<int, LocalPlayer> players;
         public static Dictionary<int, LocalRocket> syncedRockets;
-        public static HashSet<int> unsyncedRockets;
+        public static Dictionary<int, Rocket> unsyncedRockets;
         /// <summary>
         /// The local id of the rocket that this player should be controlling after their launched rockets has been synced with the server.
         /// </summary>
@@ -38,7 +38,7 @@ namespace MultiplayerSFS.Mod
             {
                 players = new Dictionary<int, LocalPlayer>();
                 syncedRockets = new Dictionary<int, LocalRocket>();
-                unsyncedRockets = new HashSet<int>();
+                unsyncedRockets = new Dictionary<int, Rocket>();
                 updateAuthority = new HashSet<int>();
                 unsyncedToControl = -1;
 
@@ -126,31 +126,6 @@ namespace MultiplayerSFS.Mod
             }
         }
 
-        public static void CreateRocket(Packet_CreateRocket packet)
-        {
-            unsyncedRockets.Remove(packet.LocalId);
-            DestroyLocalRocket(packet.GlobalId);
-            ClientManager.world.rockets[packet.GlobalId] = packet.Rocket;
-            if (GameManager.main != null)
-            {
-                LocalRocket rocket = SpawnLocalRocket(packet.Rocket);
-                syncedRockets.Add(packet.GlobalId, rocket);
-                if (packet.LocalId == unsyncedToControl)
-                {
-                    unsyncedToControl = -1;
-                    PlayerController.main.player.Value = rocket.rocket;
-                    GameCamerasManager.main.InstantlyRotateCamera();
-                    // * This loading screen is opened in the `SceneLoader_LoadWorldScene` patch.
-                    Menu.loading.Close();
-                }
-                if (packet.GlobalId == players[ClientManager.playerId].currentRocket)
-                {
-                    // * Complete resync was sent for this client's rocket.
-                    PlayerController.main.player.Value = rocket.rocket;
-                }
-            }
-        }
-
         // ? Similar to `SFS.World.RocketManager.LoadRocket(RocketSave, ...)`.
         public static LocalRocket SpawnLocalRocket(RocketState state)
         {
@@ -185,6 +160,7 @@ namespace MultiplayerSFS.Mod
 
         static Part SpawnLocalPart(PartState part, Transform holder = null)
         {
+            // Debug.Log(part.part.name);
             return PartsLoader.CreatePart(part.part, holder, null, OnPartNotOwned.Allow, out _);
         }
 
@@ -218,10 +194,39 @@ namespace MultiplayerSFS.Mod
             }
         }
 
+        public static void CreateRocket(Packet_CreateRocket packet)
+        {
+            DestroyLocalRocket(packet.GlobalId);
+            if (unsyncedRockets.TryGetValue(packet.LocalId, out Rocket unsynced))
+            {
+                RocketManager.DestroyRocket(unsynced, DestructionReason.Intentional);
+                unsyncedRockets.Remove(packet.LocalId);
+            }
+            if (GameManager.main != null)
+            {
+                LocalRocket synced = SpawnLocalRocket(packet.Rocket);
+                syncedRockets.Add(packet.GlobalId, synced);
+                if (packet.LocalId == unsyncedToControl)
+                {
+                    unsyncedToControl = -1;
+                    PlayerController.main.player.Value = synced.rocket;
+                    GameCamerasManager.main.InstantlyRotateCamera();
+                    // * This loading screen is opened in the `SceneLoader_LoadWorldScene` patch.
+                    // TODO: idk if the player can even see this loading screen, but oh well...
+                    Menu.loading.Close();
+                }
+                if (packet.GlobalId == players[ClientManager.playerId].currentRocket)
+                {
+                    // * Complete resync was sent for this client's rocket.
+                    PlayerController.main.player.Value = synced.rocket;
+                }
+            }
+        }
+
         public static void DestroyRocket(int id, DestructionReason reason = DestructionReason.Intentional)
         {
-            DestroyLocalRocket(id, reason);
             ClientManager.world.rockets.Remove(id);
+            DestroyLocalRocket(id, reason);
         }
 
         public static void UpdateLocalRocket(Packet_UpdateRocket packet)

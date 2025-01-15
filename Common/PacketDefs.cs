@@ -60,7 +60,7 @@ namespace MultiplayerSFS.Common
         /// <summary>
         /// Sent whenever the staging of a rocket has been changed.
         /// </summary>
-        UpdateStaging, // TODO: This packet could technically be split up to make it more efficient, but it's probably easier to just keep it like this.
+        UpdateStaging,
     }
 
     public abstract class Packet : INetData
@@ -90,7 +90,7 @@ namespace MultiplayerSFS.Common
     }
     public class Packet_JoinResponse : Packet
     {
-        public int PlayerId { get; set; }
+        public int PlayerId { get; set; } = -1;
         public double UpdateRocketsPeriod { get; set; }
         public double WorldTime { get; set; }
         public Difficulty.DifficultyType Difficulty { get; set; }
@@ -114,7 +114,7 @@ namespace MultiplayerSFS.Common
     }
     public class Packet_PlayerConnected : Packet
     {
-        public int Id { get; set; }
+        public int Id { get; set; } = -1;
         public string Username { get; set; }
         public bool PrintMessage { get; set; }
 
@@ -134,7 +134,7 @@ namespace MultiplayerSFS.Common
     }
     public class Packet_PlayerDisconnected : Packet
     {
-        public int Id { get; set; }
+        public int Id { get; set; } = -1;
 
         public override PacketType Type => PacketType.PlayerDisconnected;
         public override void Serialize(NetOutgoingMessage msg)
@@ -148,8 +148,8 @@ namespace MultiplayerSFS.Common
     }
     public class Packet_UpdatePlayerControl : Packet
     {
-        public int PlayerId { get; set; }
-        public int RocketId { get; set; }
+        public int PlayerId { get; set; } = -1;
+        public int RocketId { get; set; } = -1;
         
         public override PacketType Type => PacketType.UpdatePlayerControl;
         public override void Serialize(NetOutgoingMessage msg)
@@ -181,9 +181,9 @@ namespace MultiplayerSFS.Common
     // * Rocket Packets
     public class Packet_CreateRocket : Packet
     {
-        public int PlayerId { get; set; }
-        public int LocalId { get; set; }
-        public int GlobalId { get; set; }
+        public int PlayerId { get; set; } = -1;
+        public int LocalId { get; set; } = -1;
+        public int GlobalId { get; set; } = -1;
         public RocketState Rocket { get; set; }
 
         public override PacketType Type => PacketType.CreateRocket;
@@ -204,7 +204,7 @@ namespace MultiplayerSFS.Common
     }
     public class Packet_DestroyRocket : Packet
     {
-        public int Id { get; set; }
+        public int Id { get; set; } = -1;
 
         public override PacketType Type => PacketType.DestroyRocket;
         public override void Serialize(NetOutgoingMessage msg)
@@ -218,7 +218,7 @@ namespace MultiplayerSFS.Common
     }
     public class Packet_UpdateRocket : Packet
     {
-        public int Id { get; set; }
+        public int Id { get; set; } = -1;
         public float Input_Turn { get; set; }
         // * Since the directional axes differ from the raw input depending on the controlling player's camera rotation, it's easier to just send all three values.
         public Vector2 Input_Raw { get; set; }
@@ -265,8 +265,8 @@ namespace MultiplayerSFS.Common
     // * Part & Staging Packets
     public class Packet_UpdatePart : Packet
     {
-        public int RocketId { get; set; }
-        public int PartId { get; set; }
+        public int RocketId { get; set; } = -1;
+        public int PartId { get; set; } = -1;
         public PartState NewPart { get; set; }
 
         public override PacketType Type => PacketType.UpdatePart;
@@ -285,8 +285,8 @@ namespace MultiplayerSFS.Common
     }
     public class Packet_DestroyPart : Packet
     {
-        public int RocketId { get; set; }
-        public int PartId { get; set; }
+        public int RocketId { get; set; } = -1;
+        public int PartId { get; set; } = -1;
         public bool CreateExplosion { get; set; }
 
         public override PacketType Type => PacketType.DestroyPart;
@@ -306,7 +306,7 @@ namespace MultiplayerSFS.Common
 
     public class Packet_UpdateStaging : Packet
     {
-        public int RocketId { get; set; }
+        public int RocketId { get; set; } = -1;
         public List<StageState> Stages {get; set; }
 
         public override PacketType Type => PacketType.UpdateStaging;

@@ -282,6 +282,7 @@ namespace MultiplayerSFS.Mod
         static void OnPacket_CreateRocket(NetIncomingMessage msg)
         {
             Packet_CreateRocket packet = msg.Read<Packet_CreateRocket>();
+            world.rockets[packet.GlobalId] = packet.Rocket;
             LocalManager.CreateRocket(packet);
         }
 

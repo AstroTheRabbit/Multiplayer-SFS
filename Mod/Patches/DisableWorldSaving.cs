@@ -19,7 +19,7 @@ namespace MultiplayerSFS.Mod.Patches
                 {
                     // ? This is only called when exiting to the hub or build scenes, since its use in `GameManager.Update` is patched out.
                     LocalManager.syncedRockets = new Dictionary<int, LocalRocket>();
-                    LocalManager.unsyncedRockets = new HashSet<int>();
+                    LocalManager.unsyncedRockets = new Dictionary<int, Rocket>();
                     LocalManager.unsyncedToControl = -1;
                     return false;
                 }

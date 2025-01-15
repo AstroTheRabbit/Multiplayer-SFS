@@ -1,12 +1,14 @@
 using System.Threading;
 using HarmonyLib;
+using UnityEngine;
 using SFS;
-using SFS.Career;
+using SFS.UI;
 using SFS.Stats;
 using SFS.World;
-using SFS.World.Maps;
+using SFS.Builds;
+using SFS.Career;
 using SFS.WorldBase;
-using UnityEngine;
+using SFS.World.Maps;
 
 namespace MultiplayerSFS.Mod.Patches
 {
@@ -88,12 +90,11 @@ namespace MultiplayerSFS.Mod.Patches
                     }
                     LogManager.main.ClearBranches();
 
-                    // * The job of spawning the blueprint is transferred to the `SceneLoader.LoadWorldScene` patch, and changing `PlayerController.main.player.Value` is done by `LocalManager.CreateRocket`.
-                    // // if (SavingCache.main.TryLoadBuildPersistent(MsgDrawer.main, out Blueprint buildPersistent, eraseCache: false))
-                    // // {
-                    // //     RocketManager.SpawnBlueprint(buildPersistent);
-                    // // }
-                    // // GameCamerasManager.main.InstantlyRotateCamera();
+                    if (SavingCache.main.TryLoadBuildPersistent(MsgDrawer.main, out Blueprint buildPersistent, eraseCache: false))
+                    {
+                        RocketManager.SpawnBlueprint(buildPersistent);
+                    }
+                    GameCamerasManager.main.InstantlyRotateCamera();
 
                     return false;
                 }
