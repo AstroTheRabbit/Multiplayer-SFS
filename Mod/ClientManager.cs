@@ -213,6 +213,10 @@ namespace MultiplayerSFS.Mod
                 case PacketType.DestroyPart:
                     OnPacket_DestroyPart(msg);
                     break;
+                case PacketType.UpdateStaging:
+                    // ! TODO
+                    OnPacket_UpdateStaging(msg);
+                    break;
                 
                 // * Invalid Packets
                 case PacketType.JoinResponse:
@@ -229,6 +233,7 @@ namespace MultiplayerSFS.Mod
 
         public static void SendPacket(Packet packet, NetDeliveryMethod method = NetDeliveryMethod.ReliableOrdered)
         {
+            // Debug.Log($"Sending packet of type {packet.Type}.");
             NetOutgoingMessage msg = client.CreateMessage();
             msg.Write((byte) packet.Type);
             msg.Write(packet);
@@ -321,6 +326,16 @@ namespace MultiplayerSFS.Mod
             {
                 state.RemovePart(packet.PartId);
                 LocalManager.DestroyLocalPart(packet);
+            }
+        }
+
+        static void OnPacket_UpdateStaging(NetIncomingMessage msg)
+        {
+            Packet_UpdateStaging packet = msg.Read<Packet_UpdateStaging>();
+            if (world.rockets.TryGetValue(packet.RocketId, out RocketState state))
+            {
+                state.stages = packet.Stages;
+                LocalManager.UpdateLocalStaging(packet);
             }
         }
     }

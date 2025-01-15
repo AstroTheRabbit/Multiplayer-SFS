@@ -399,6 +399,9 @@ namespace MultiplayerSFS.Server
 				case PacketType.DestroyPart:
 					OnPacket_DestroyPart(msg);
 					break;
+				case PacketType.UpdateStaging:
+					OnPacket_UpdateStaging(msg);
+					break;
 				
 				case PacketType.JoinRequest:
 					Logger.Warning("Recieved join request outside of connection attempt.");
@@ -484,6 +487,16 @@ namespace MultiplayerSFS.Server
 			{
 				if (state.RemovePart(packet.PartId))
 					SendPacketToAll(packet, msg.SenderConnection);
+			}
+		}
+
+		static void OnPacket_UpdateStaging(NetIncomingMessage msg)
+		{
+			Packet_UpdateStaging packet = msg.Read<Packet_UpdateStaging>();
+			if (world.rockets.TryGetValue(packet.RocketId, out RocketState state))
+			{
+				state.stages = packet.Stages;
+				SendPacketToAll(packet, msg.SenderConnection);
 			}
 		}
 	}

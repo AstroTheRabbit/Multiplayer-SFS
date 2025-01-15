@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.Reflection;
 using System.Collections.Generic;
 using UnityEngine;
 using HarmonyLib;
@@ -300,6 +301,57 @@ namespace MultiplayerSFS.Mod.Patches
                             NewPart = state
                         }
                     );
+                }
+            }
+        }
+
+        /// <summary>
+        /// Sends `UpdateStaging` packets after the staging of a rocket has been changed.
+        /// </summary>
+        [HarmonyPatch]
+        public class StagingUpdates
+        {
+            static IEnumerable<MethodBase> TargetMethods()
+            {
+                string[] methods = new[]
+                {
+                    "AddStage",
+                    "UseStage",
+                    "OnReorder",
+                    "RemoveStage",
+                    "TogglePartSelected",
+                };
+                return methods.Select(n => AccessTools.Method(typeof(StagingDrawer), n)).Cast<MethodBase>();
+            }
+
+            public static void Postfix(StagingDrawer __instance)
+            {
+                Staging staging = __instance.FieldRef<Staging_Local>("staging").Value;
+                int rocketId = LocalManager.GetLocalRocketID(staging.rocket);
+                if (GameManager.main != null && LocalManager.syncedRockets.TryGetValue(rocketId, out LocalRocket rocket))
+                {
+                    List<StageState> stages = new List<StageState>(staging.stages.Count);
+                    foreach (Stage stage in staging.stages)
+                    {
+                        StageState state = new StageState()
+                        {
+                            stageID = stage.stageId,
+                            partIDs = stage.parts.Select(rocket.GetPartID).ToList(),
+                        };
+                        stages.Add(state);
+                    }
+                    ClientManager.SendPacket
+                    (
+                        new Packet_UpdateStaging()
+                        {
+                            RocketId = rocketId,
+                            Stages = stages,
+                        }
+                    );
+                }
+                else
+                {
+                    Debug.LogError("Missing local rocket when trying to send staging update!");
                 }
             }
         }

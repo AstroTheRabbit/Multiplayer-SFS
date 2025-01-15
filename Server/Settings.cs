@@ -23,7 +23,7 @@ namespace MultiplayerSFS.Server
 		/// <summary>
 		/// Prevents players from joining if their username is already in use on the server.
 		/// </summary>
-		public bool blockDuplicatePlayerNames = true;
+		public bool blockDuplicatePlayerNames = false; // ! TEST VALUE
 
 		/// <summary>
 		/// A time (in seconds) after which the server will send a full `CreateRocket` packets to resync all rockets.

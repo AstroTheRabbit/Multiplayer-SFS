@@ -48,7 +48,7 @@ namespace MultiplayerSFS.Common
         /// </summary>
         UpdateRocket,
 
-        // * Part/staging packets
+        // * Part & Staging Packets
         /// <summary>
         /// Sent whenever a part has changed state - staging, manual activation, etc.
         /// </summary>
@@ -57,7 +57,10 @@ namespace MultiplayerSFS.Common
         /// Sent whenever a part is destroyed.
         /// </summary>
         DestroyPart,
-        // UpdateStaging
+        /// <summary>
+        /// Sent whenever the staging of a rocket has been changed.
+        /// </summary>
+        UpdateStaging, // TODO: This packet could technically be split up to make it more efficient, but it's probably easier to just keep it like this.
     }
 
     public abstract class Packet : INetData
@@ -151,10 +154,6 @@ namespace MultiplayerSFS.Common
         public override PacketType Type => PacketType.UpdatePlayerControl;
         public override void Serialize(NetOutgoingMessage msg)
         {
-            if (RocketId == 0)
-            {
-                throw new System.Exception("AHHH!!!!");
-            }
             msg.Write(PlayerId);
             msg.Write(RocketId);
         }
@@ -263,7 +262,7 @@ namespace MultiplayerSFS.Common
         }
     } 
 
-    // * Part Packets
+    // * Part & Staging Packets
     public class Packet_UpdatePart : Packet
     {
         public int RocketId { get; set; }
@@ -305,83 +304,21 @@ namespace MultiplayerSFS.Common
         }
     }
 
-    // * Staging Packets
-    public class Packet_CreateStage : Packet
+    public class Packet_UpdateStaging : Packet
     {
         public int RocketId { get; set; }
-        public int StageId { get; set; }
+        public List<StageState> Stages {get; set; }
 
-        public override PacketType Type => PacketType.CreateStage;
+        public override PacketType Type => PacketType.UpdateStaging;
         public override void Serialize(NetOutgoingMessage msg)
         {
-            // ! TODO
+            msg.Write(RocketId);
+            msg.WriteCollection(Stages, msg.Write);
         }
         public override void Deserialize(NetIncomingMessage msg)
         {
-            // ! TODO
-        }
-    }
-    public class Packet_RemoveStage : Packet
-    {
-        public int RocketId { get; set; }
-        public int StageId { get; set; }
-
-        public override PacketType Type => PacketType.RemoveStage;
-        public override void Serialize(NetOutgoingMessage msg)
-        {
-            // ! TODO
-        }
-        public override void Deserialize(NetIncomingMessage msg)
-        {
-            // ! TODO
-        }
-    }
-    public class Packet_AddPartToStage : Packet
-    {
-        public int RocketId { get; set; }
-        public int StageId { get; set; }
-        public int PartId { get; set; }
-        
-        public override PacketType Type => PacketType.AddPartToStage;
-        public override void Serialize(NetOutgoingMessage msg)
-        {
-            // ! TODO
-        }
-        public override void Deserialize(NetIncomingMessage msg)
-        {
-            // ! TODO
-        }
-    }
-    public class Packet_RemovePartFromStage : Packet
-    {
-        public int RocketId { get; set; }
-        public int StageId { get; set; }
-        public int PartId { get; set; }
-
-        public override PacketType Type => PacketType.RemovePartFromStage;
-        public override void Serialize(NetOutgoingMessage msg)
-        {
-            // ! TODO
-        }
-        public override void Deserialize(NetIncomingMessage msg)
-        {
-            // ! TODO
-        }
-    }
-    public class Packet_ReorderStage : Packet
-    {
-        public int RocketId { get; set; }
-        public int StageId { get; set; }
-        public int Index { get; set; }
-
-        public override PacketType Type => PacketType.ReorderStage;
-        public override void Serialize(NetOutgoingMessage msg)
-        {
-            // ! TODO
-        }
-        public override void Deserialize(NetIncomingMessage msg)
-        {
-            // ! TODO
+            RocketId = msg.ReadInt32();
+            Stages = msg.ReadCollection((int count) => new List<StageState>(count), () => msg.Read<StageState>());
         }
     }
 }

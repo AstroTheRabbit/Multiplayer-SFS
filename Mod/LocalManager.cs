@@ -183,6 +183,11 @@ namespace MultiplayerSFS.Mod
             return new LocalRocket(rocket, parts);
         }
 
+        static Part SpawnLocalPart(PartState part, Transform holder = null)
+        {
+            return PartsLoader.CreatePart(part.part, holder, null, OnPartNotOwned.Allow, out _);
+        }
+
         static Dictionary<int, Part> SpawnLocalParts(RocketState state)
         {
             Dictionary<int, Part> result = new Dictionary<int, Part>(state.parts.Count);
@@ -192,11 +197,6 @@ namespace MultiplayerSFS.Mod
                 result.Add(kvp.Key, part);
             }
             return result;
-        }
-
-        static Part SpawnLocalPart(PartState part, Transform holder = null)
-        {
-            return PartsLoader.CreatePart(part.part, holder, null, OnPartNotOwned.Allow, out _);
         }
 
         static void DestroyLocalRocket(int id, DestructionReason reason = DestructionReason.Intentional)
@@ -298,12 +298,8 @@ namespace MultiplayerSFS.Mod
                 }
                 else
                 {
-                    Debug.LogError("Missing local part when trying to update part!");
+                    Debug.LogError("Missing local part when trying to update!");
                 }
-            }
-            else
-            {
-                Debug.LogError("Missing local rocket when trying to update part!");
             }
         }
 
@@ -313,10 +309,22 @@ namespace MultiplayerSFS.Mod
             {
                 if (rocket.parts.TryGetValue(packet.PartId, out Part localPart) && localPart != null)
                 {
-                    Debug.Log($"Destroyed part {packet.RocketId}:{packet.PartId}");
                     // ? This mod uses `(DestructionReason) 4` as a way to signal that the server has told the client to destroy this part.
                     localPart.DestroyPart(packet.CreateExplosion, true, (DestructionReason) 4);
                 }
+            }
+        }
+
+        public static void UpdateLocalStaging(Packet_UpdateStaging packet)
+        {
+            if (syncedRockets.TryGetValue(packet.RocketId, out LocalRocket rocket) && rocket.rocket != null)
+            {
+                rocket.rocket.staging.ClearStages(false);
+                foreach (StageState stage in packet.Stages)
+                {
+                    List<Part> stageParts = stage.partIDs.Select(id => rocket.parts[id]).ToList();
+                    rocket.rocket.staging.InsertStage(new Stage(stage.stageID, stageParts), false);
+                }   
             }
         }
     }
@@ -332,11 +340,15 @@ namespace MultiplayerSFS.Mod
             this.parts = parts;
         }
 
-        public Part GetPart(int id)
+        /// <summary>
+        /// Gets the id of a local part, or -1 if this rocket does not contain the provided part.
+        /// </summary>
+        public int GetPartID(Part part)
         {
-            if (parts.TryGetValue(id, out Part res))
-                return res;
-            return null;
+            if (parts.FirstOrDefault(p => p.Value == part) is KeyValuePair<int, Part> kvp)
+                return kvp.Key;
+            else
+                return -1;
         }
     }
 
