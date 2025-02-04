@@ -18,8 +18,8 @@ namespace MultiplayerSFS.Mod.Patches
                 if (ClientManager.multiplayerEnabled.Value)
                 {
                     // ? This is only called when exiting to the hub or build scenes, since its use in `GameManager.Update` is patched out.
-                    LocalManager.syncedRockets = new Dictionary<int, LocalRocket>();
-                    LocalManager.unsyncedRockets = new Dictionary<int, Rocket>();
+                    LocalManager.syncedRockets.Clear();
+                    LocalManager.unsyncedRockets.Clear();
                     LocalManager.unsyncedToControl = -1;
                     return false;
                 }

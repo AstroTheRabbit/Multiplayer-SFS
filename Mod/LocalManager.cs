@@ -20,7 +20,7 @@ namespace MultiplayerSFS.Mod
     {
         public static Dictionary<int, LocalPlayer> players;
         public static Dictionary<int, LocalRocket> syncedRockets;
-        public static Dictionary<int, Rocket> unsyncedRockets;
+        public static Dictionary<int, LocalRocket> unsyncedRockets;
         /// <summary>
         /// The local id of the rocket that this player should be controlling after their launched rockets has been synced with the server.
         /// </summary>
@@ -29,7 +29,7 @@ namespace MultiplayerSFS.Mod
 
         public static double updateRocketsPeriod = 20;
         public static Timer updateTimer;
-        
+
         static Rocket RocketPrefab => AccessTools.StaticFieldRefAccess<Rocket>(typeof(RocketManager), "prefab");
 
         public static void Initialize()
@@ -38,7 +38,7 @@ namespace MultiplayerSFS.Mod
             {
                 players = new Dictionary<int, LocalPlayer>();
                 syncedRockets = new Dictionary<int, LocalRocket>();
-                unsyncedRockets = new Dictionary<int, Rocket>();
+                unsyncedRockets = new Dictionary<int, LocalRocket>();
                 updateAuthority = new HashSet<int>();
                 unsyncedToControl = -1;
 
@@ -46,7 +46,7 @@ namespace MultiplayerSFS.Mod
                 {
                     Interval = updateRocketsPeriod,
                     AutoReset = true,
-					Enabled = true,
+                    Enabled = true,
                 };
                 updateTimer.Elapsed += (object source, ElapsedEventArgs e) => SendUpdatePackets();
                 SceneHelper.OnHomeSceneLoaded += DisableUpdateTimer;
@@ -146,7 +146,7 @@ namespace MultiplayerSFS.Mod
             rocket.SetJointGroup(new JointGroup(joints, parts.Values.ToList()));
 
             rocket.rb2d.transform.eulerAngles = new Vector3(0f, 0f, state.rotation);
-            
+
             rocket.physics.SetLocationAndState(state.location.GetSaveLocation(WorldTime.main.worldTime), true);
             rocket.rb2d.angularVelocity = state.angularVelocity;
 
@@ -160,7 +160,6 @@ namespace MultiplayerSFS.Mod
 
         static Part SpawnLocalPart(PartState part, Transform holder = null)
         {
-            // Debug.Log(part.part.name);
             return PartsLoader.CreatePart(part.part, holder, null, OnPartNotOwned.Allow, out _);
         }
 
@@ -175,7 +174,7 @@ namespace MultiplayerSFS.Mod
             return result;
         }
 
-        static void DestroyLocalRocket(int id, DestructionReason reason = DestructionReason.Intentional)
+        public static void DestroyLocalRocket(int id, DestructionReason reason = DestructionReason.Intentional)
         {
             if (syncedRockets.TryGetValue(id, out LocalRocket rocket) && rocket.rocket != null)
             {
@@ -186,6 +185,7 @@ namespace MultiplayerSFS.Mod
 
         public static void OnLoadWorld()
         {
+            unsyncedRockets.Clear();
             foreach (KeyValuePair<int, RocketState> kvp in ClientManager.world.rockets)
             {
                 DestroyLocalRocket(kvp.Key);
@@ -197,27 +197,30 @@ namespace MultiplayerSFS.Mod
         public static void CreateRocket(Packet_CreateRocket packet)
         {
             DestroyLocalRocket(packet.GlobalId);
-            if (unsyncedRockets.TryGetValue(packet.LocalId, out Rocket unsynced))
+            if (unsyncedRockets.TryGetValue(packet.LocalId, out LocalRocket unsynced))
             {
-                RocketManager.DestroyRocket(unsynced, DestructionReason.Intentional);
                 unsyncedRockets.Remove(packet.LocalId);
-            }
-            if (GameManager.main != null)
-            {
-                LocalRocket synced = SpawnLocalRocket(packet.Rocket);
-                syncedRockets.Add(packet.GlobalId, synced);
+                syncedRockets.Add(packet.GlobalId, unsynced);
+
                 if (packet.LocalId == unsyncedToControl)
                 {
                     unsyncedToControl = -1;
-                    PlayerController.main.player.Value = synced.rocket;
+                    PlayerController.main.player.Value = unsynced.rocket;
+                    PlayerController.main.SmoothChangePlayer(unsynced.rocket);
                     GameCamerasManager.main.InstantlyRotateCamera();
                     // * This loading screen is opened in the `SceneLoader_LoadWorldScene` patch.
                     // TODO: idk if the player can even see this loading screen, but oh well...
                     Menu.loading.Close();
                 }
-                if (packet.GlobalId == players[ClientManager.playerId].currentRocket)
+            }
+            else if (GameManager.main != null)
+            {
+                LocalRocket synced = SpawnLocalRocket(packet.Rocket);
+                syncedRockets.Add(packet.GlobalId, synced);
+                if (players[ClientManager.playerId].currentRocket == packet.GlobalId)
                 {
                     // * Complete resync was sent for this client's rocket.
+                    // PlayerController.main.SmoothChangePlayer(synced.rocket);
                     PlayerController.main.player.Value = synced.rocket;
                 }
             }
@@ -225,7 +228,6 @@ namespace MultiplayerSFS.Mod
 
         public static void DestroyRocket(int id, DestructionReason reason = DestructionReason.Intentional)
         {
-            ClientManager.world.rockets.Remove(id);
             DestroyLocalRocket(id, reason);
         }
 
@@ -234,6 +236,7 @@ namespace MultiplayerSFS.Mod
             if (syncedRockets.TryGetValue(packet.Id, out LocalRocket rocket) && rocket.rocket != null)
             {
                 Arrowkeys arrowkeys = rocket.rocket.arrowkeys;
+                arrowkeys.turnAxis.Value = packet.Input_Turn;
                 arrowkeys.rawArrowkeysAxis.Value = packet.Input_Raw;
                 arrowkeys.horizontalAxis.Value = packet.Input_Horizontal;
                 arrowkeys.verticalAxis.Value = packet.Input_Vertical;
@@ -297,7 +300,7 @@ namespace MultiplayerSFS.Mod
 
                     WorldEventSyncing.Rocket_InjectPartDependencies.InjectPartDependencies(rocket);
                     rocket.rb2d.mass = rocket.mass.GetMass();
-	                rocket.rb2d.centerOfMass = rocket.mass.GetCenterOfMass();
+                    rocket.rb2d.centerOfMass = rocket.mass.GetCenterOfMass();
 
                     // TODO: Various bits of code related to flow and resource modules, docking ports, etc may need to be added, idk.
                 }
@@ -329,7 +332,7 @@ namespace MultiplayerSFS.Mod
                 {
                     List<Part> stageParts = stage.partIDs.Select(id => rocket.parts[id]).ToList();
                     rocket.rocket.staging.InsertStage(new Stage(stage.stageID, stageParts), false);
-                }   
+                }
             }
         }
     }
@@ -339,14 +342,55 @@ namespace MultiplayerSFS.Mod
         public Rocket rocket;
         public Dictionary<int, Part> parts;
 
+        public LocalRocket(Rocket rocket)
+        {
+            this.rocket = rocket;
+            parts = new Dictionary<int, Part>(rocket.partHolder.partsSet.Count);
+            foreach (Part part in rocket.partHolder.partsSet)
+            {
+                parts.InsertNew(part);
+            }
+        }
+
         public LocalRocket(Rocket rocket, Dictionary<int, Part> parts)
         {
             this.rocket = rocket;
             this.parts = parts;
         }
 
+        public RocketState ToState()
+        {
+            return new RocketState()
+            {
+                rocketName = rocket.rocketName,
+                location = new WorldSave.LocationData(rocket.location.Value),
+                rotation = rocket.rb2d.transform.eulerAngles.z,
+                angularVelocity = rocket.rb2d.angularVelocity,
+                throttleOn = rocket.throttle.throttleOn,
+                throttlePercent = rocket.throttle.throttlePercent,
+                RCS = rocket.arrowkeys.rcs,
+
+                input_Turn = rocket.arrowkeys.turnAxis,
+                input_Raw = rocket.arrowkeys.rawArrowkeysAxis,
+                input_Horizontal = rocket.arrowkeys.horizontalAxis,
+                input_Vertical = rocket.arrowkeys.verticalAxis,
+
+                parts = parts
+                    .Where(kvp => kvp.Value != null)
+                    .ToDictionary(kvp => kvp.Key, kvp => new PartState(new PartSave(kvp.Value))),
+                joints = rocket.jointsGroup.joints
+                    .Where(pj => pj.a != null && pj.b != null)
+                    .Select(pj => new JointState(GetPartID(pj.a), GetPartID(pj.b)))
+                    .ToList(),
+                stages = rocket.staging.stages
+                    .Select(s => new StageState(s.stageId, s.parts.Where(p => p != null).Select(GetPartID).ToList()))
+                    .ToList(),
+            };
+        }
+
+        // TODO: It may be worth storing an inverse dictionary to make this more efficient.
         /// <summary>
-        /// Gets the id of a local part, or -1 if this rocket does not contain the provided part.
+        /// Returns the id of a local part, or -1 if this rocket does not contain the provided part.
         /// </summary>
         public int GetPartID(Part part)
         {

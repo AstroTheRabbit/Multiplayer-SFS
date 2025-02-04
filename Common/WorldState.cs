@@ -312,6 +312,13 @@ namespace MultiplayerSFS.Common
         public List<int> partIDs;
 
         public StageState() {}
+
+        public StageState(int stageID, List<int> partIDs)
+        {
+            this.stageID = stageID;
+            this.partIDs = partIDs;
+        }
+
         public StageState(StageSave save, Dictionary<int, int> partIndexToID, HashSet<int> onlyInclude = null)
         {
             stageID = save.stageId;

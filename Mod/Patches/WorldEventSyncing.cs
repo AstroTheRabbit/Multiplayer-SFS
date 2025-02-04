@@ -103,13 +103,13 @@ namespace MultiplayerSFS.Mod.Patches
 
             public static void SyncLaunch(Rocket[] rockets)
             {
-                Debug.Log("SYNC START");
                 Menu.loading.Open("Sending launch request to server...");
                 Dictionary<Rocket, int> locals = new Dictionary<Rocket, int>(rockets.Length);
                 foreach (Rocket rocket in rockets)
                 {
-                    int localId = LocalManager.unsyncedRockets.InsertNew(rocket);
-                    RocketState state = new RocketState(new RocketSave(rocket));
+                    LocalRocket lr = new LocalRocket(rocket);
+                    int localId = LocalManager.unsyncedRockets.InsertNew(lr);
+                    RocketState state = lr.ToState();
                     ClientManager.SendPacket
                     (
                         new Packet_CreateRocket()
@@ -124,7 +124,6 @@ namespace MultiplayerSFS.Mod.Patches
                 Rocket controllable = rockets.FirstOrDefault((Rocket r) => r.hasControl.Value);
                 Rocket toControl = controllable ?? ((rockets.Length != 0) ? rockets[0] : null);
                 LocalManager.unsyncedToControl = toControl != null && locals.TryGetValue(toControl, out int idToControl) ? idToControl : -1;
-                Debug.Log("SYNC CONT");
             }
         }
 
@@ -197,7 +196,7 @@ namespace MultiplayerSFS.Mod.Patches
         [HarmonyPatch(typeof(Rocket), nameof(Rocket.UseParts))]
         public class Rocket_UseParts
         {
-            public static void Postfix((Part, PolygonData)[] regions)
+            public static void Prefix((Part, PolygonData)[] regions)
             {
                 if (ClientManager.multiplayerEnabled)
                 {
@@ -295,23 +294,24 @@ namespace MultiplayerSFS.Mod.Patches
             }
             public static void Postfix(Rocket rocket, List<Rocket> childRockets)
             {
-                // ! TODO: This currently creates insane lag to the point of freezing SFS. I should probably change how unsynced rockets are managed so they aren't completely recreated when verified by the server.
                 if (ClientManager.multiplayerEnabled)
                 {
                     int rocketId = LocalManager.GetLocalRocketID(rocket);
+                    LocalRocket localRocket = LocalManager.syncedRockets[rocketId];
                     ClientManager.SendPacket
                     (
                         new Packet_CreateRocket()
                         {
                             PlayerId = ClientManager.playerId,
                             GlobalId = rocketId,
-                            Rocket = new RocketState(new RocketSave(rocket)),
+                            Rocket = localRocket.ToState(),
                         }
                     );
                     foreach (Rocket cr in childRockets)
                     {
-                        int localId = LocalManager.unsyncedRockets.InsertNew(cr);
-                        RocketState state = new RocketState(new RocketSave(cr));
+                        LocalRocket lr = new LocalRocket(cr);
+                        int localId = LocalManager.unsyncedRockets.InsertNew(lr);
+                        RocketState state = lr.ToState();
                         ClientManager.SendPacket
                         (
                             new Packet_CreateRocket()

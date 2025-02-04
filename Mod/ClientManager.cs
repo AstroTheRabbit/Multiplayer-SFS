@@ -289,7 +289,8 @@ namespace MultiplayerSFS.Mod
         static void OnPacket_DestroyRocket(NetIncomingMessage msg)
         {
             Packet_DestroyRocket packet = msg.Read<Packet_DestroyRocket>();
-            LocalManager.DestroyRocket(packet.Id);
+            world.rockets.Remove(packet.Id);
+            LocalManager.DestroyLocalRocket(packet.Id);
         }
 
         static void OnPacket_UpdateRocket(NetIncomingMessage msg)

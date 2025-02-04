@@ -449,8 +449,17 @@ namespace MultiplayerSFS.Server
 		static void OnPacket_CreateRocket(NetIncomingMessage msg)
 		{
 			Packet_CreateRocket packet = msg.Read<Packet_CreateRocket>();
-			packet.GlobalId = world.rockets.InsertNew(packet.Rocket);
-			SendPacketToAll(packet);
+			if (world.rockets.ContainsKey(packet.GlobalId))
+            {
+                world.rockets[packet.GlobalId] = packet.Rocket;
+            	SendPacketToAll(packet, msg.SenderConnection);
+            }
+            else
+            {
+                packet.GlobalId = world.rockets.InsertNew(packet.Rocket);
+            	SendPacketToAll(packet);
+            }
+
 		}
 
 		static void OnPacket_DestroyRocket(NetIncomingMessage msg)
