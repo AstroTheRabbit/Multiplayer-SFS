@@ -50,10 +50,6 @@ namespace MultiplayerSFS.Common
 
         // * Part & Staging Packets
         /// <summary>
-        /// Sent whenever a part has changed state - staging, manual activation, etc.
-        /// </summary>
-        UpdatePart,
-        /// <summary>
         /// Sent whenever a part is destroyed.
         /// </summary>
         DestroyPart,
@@ -61,6 +57,15 @@ namespace MultiplayerSFS.Common
         /// Sent whenever the staging of a rocket has been changed.
         /// </summary>
         UpdateStaging,
+        // ? The effects of parts like docking ports and seperators are handled seperately with `CreateRocket` and `DestroyRocket` packets.
+        // TODO: However, a seperate packet may be needed for stuff like the particle effects of seperators (but that's a minor issue).
+        UpdatePart_EngineModule,
+        UpdatePart_ParachuteModule,
+        UpdatePart_ToggleModule,
+        /// <summary>
+        /// Unlike the other module update packets, `UpdateResourceModules` sends the updates in bulk to prevent the connection from being flooded.
+        /// </summary>
+        UpdatePart_ResourceModules,
     }
 
     public abstract class Packet : INetData
@@ -181,7 +186,6 @@ namespace MultiplayerSFS.Common
     // * Rocket Packets
     public class Packet_CreateRocket : Packet
     {
-        public int PlayerId { get; set; } = -1;
         public int LocalId { get; set; } = -1;
         public int GlobalId { get; set; } = -1;
         public RocketState Rocket { get; set; }
@@ -189,14 +193,12 @@ namespace MultiplayerSFS.Common
         public override PacketType Type => PacketType.CreateRocket;
         public override void Serialize(NetOutgoingMessage msg)
         {
-            msg.Write(PlayerId);
             msg.Write(LocalId);
             msg.Write(GlobalId);
             msg.Write(Rocket);
         }
         public override void Deserialize(NetIncomingMessage msg)
         {
-            PlayerId = msg.ReadInt32();
             LocalId = msg.ReadInt32();
             GlobalId = msg.ReadInt32();
             Rocket = msg.Read<RocketState>();
@@ -263,26 +265,6 @@ namespace MultiplayerSFS.Common
     } 
 
     // * Part & Staging Packets
-    public class Packet_UpdatePart : Packet
-    {
-        public int RocketId { get; set; } = -1;
-        public int PartId { get; set; } = -1;
-        public PartState NewPart { get; set; }
-
-        public override PacketType Type => PacketType.UpdatePart;
-        public override void Serialize(NetOutgoingMessage msg)
-        {
-            msg.Write(RocketId);
-            msg.Write(PartId);
-            msg.Write(NewPart);
-        }
-        public override void Deserialize(NetIncomingMessage msg)
-        {
-            RocketId = msg.ReadInt32();
-            PartId = msg.ReadInt32();
-            NewPart = msg.Read<PartState>();
-        }
-    }
     public class Packet_DestroyPart : Packet
     {
         public int RocketId { get; set; } = -1;
@@ -303,7 +285,6 @@ namespace MultiplayerSFS.Common
             CreateExplosion = msg.ReadBoolean();
         }
     }
-
     public class Packet_UpdateStaging : Packet
     {
         public int RocketId { get; set; } = -1;
@@ -321,4 +302,51 @@ namespace MultiplayerSFS.Common
             Stages = msg.ReadCollection((int count) => new List<StageState>(count), () => msg.Read<StageState>());
         }
     }
+    public class Packet_UpdatePart_EngineModule : Packet
+    {
+        public int RocketId { get; set; } = -1;
+        public int PartId { get; set; } = -1;
+        public bool EngineOn { get; set; }
+
+        public override PacketType Type => PacketType.UpdatePart_EngineModule;
+        public override void Serialize(NetOutgoingMessage msg)
+        {
+            msg.Write(RocketId);
+            msg.Write(PartId);
+            msg.Write(EngineOn);
+        }
+        public override void Deserialize(NetIncomingMessage msg)
+        {
+            RocketId = msg.ReadInt32();
+            PartId = msg.ReadInt32();
+            EngineOn = msg.ReadBoolean();
+        }
+    }
+    public class Packet_UpdatePart_ParachuteModule : Packet
+    {
+        public int RocketId { get; set; } = -1;
+        public int PartId { get; set; } = -1;
+        public double State { get; set; }
+        public double TargetState { get; set; }
+
+        public override PacketType Type => PacketType.UpdatePart_ParachuteModule;
+        public override void Serialize(NetOutgoingMessage msg)
+        {
+            msg.Write(RocketId);
+            msg.Write(PartId);
+            msg.Write(State);
+            msg.Write(TargetState);
+        }
+        public override void Deserialize(NetIncomingMessage msg)
+        {
+            RocketId = msg.ReadInt32();
+            PartId = msg.ReadInt32();
+            State = msg.ReadDouble();
+            TargetState = msg.ReadDouble();
+        }
+    }
+
+    // TODO
+    // UpdatePart_ToggleModule
+    // UpdatePart_ResourceModules
 }

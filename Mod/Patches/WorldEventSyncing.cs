@@ -88,7 +88,7 @@ namespace MultiplayerSFS.Mod.Patches
         {
             public static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions)
             {
-                // ? Replaces `Rocket rocket = array3.FirstOrDefault((Rocket a) => a.hasControl.Value); ...` with `Extension`.
+                // ? Replaces `Rocket rocket = array3.FirstOrDefault((Rocket a) => a.hasControl.Value); ...` with `SyncLaunch(Rocket[]);`.
                 foreach (CodeInstruction code in instructions)
                 {
                     yield return code;
@@ -103,40 +103,33 @@ namespace MultiplayerSFS.Mod.Patches
 
             public static void SyncLaunch(Rocket[] rockets)
             {
-                Menu.loading.Open("Sending launch request to server...");
-                Dictionary<Rocket, int> locals = new Dictionary<Rocket, int>(rockets.Length);
-                foreach (Rocket rocket in rockets)
+                if (ClientManager.multiplayerEnabled)
                 {
-                    LocalRocket lr = new LocalRocket(rocket);
-                    int localId = LocalManager.unsyncedRockets.InsertNew(lr);
-                    RocketState state = lr.ToState();
-                    ClientManager.SendPacket
-                    (
-                        new Packet_CreateRocket()
-                        {
-                            PlayerId = ClientManager.playerId,
-                            LocalId = localId,
-                            Rocket = state,
-                        }
-                    );
-                    locals.Add(rocket, localId);
+                    Menu.loading.Open("Sending launch request to server...");
+                    Dictionary<Rocket, int> locals = new Dictionary<Rocket, int>(rockets.Length);
+                    foreach (Rocket rocket in rockets)
+                    {
+                        LocalRocket lr = new LocalRocket(rocket);
+                        int localId = LocalManager.unsyncedRockets.InsertNew(lr);
+                        ClientManager.SendPacket
+                        (
+                            new Packet_CreateRocket()
+                            {
+                                LocalId = localId,
+                                Rocket = lr.ToState(),
+                            }
+                        );
+                        locals.Add(rocket, localId);
+                    }
+                    Rocket controllable = rockets.FirstOrDefault(r => r.hasControl.Value);
+                    Rocket toControl = controllable ?? ((rockets.Length != 0) ? rockets[0] : null);
+                    LocalManager.unsyncedToControl = toControl != null && locals.TryGetValue(toControl, out int idToControl) ? idToControl : -1;
                 }
-                Rocket controllable = rockets.FirstOrDefault((Rocket r) => r.hasControl.Value);
-                Rocket toControl = controllable ?? ((rockets.Length != 0) ? rockets[0] : null);
-                LocalManager.unsyncedToControl = toControl != null && locals.TryGetValue(toControl, out int idToControl) ? idToControl : -1;
-            }
-        }
-
-        /// <summary>
-        /// Reverse patch of `Rocket.InjectPartDependencies`, so it can be called in `LocalManager.UpdateLocalPart`.
-        /// </summary>
-        [HarmonyPatch(typeof(Rocket), "InjectPartDependencies")]
-        public class Rocket_InjectPartDependencies
-        {
-            [HarmonyReversePatch]
-            public static void InjectPartDependencies(Rocket rocket)
-            {
-                throw new NotImplementedException("Reverse patch error!");
+                else
+                {
+                    Rocket rocket = rockets.FirstOrDefault(r => r.hasControl.Value);
+	                PlayerController.main.player.Value = rocket ?? ((rockets.Length != 0) ? rockets[0] : null);
+                }
             }
         }
 
@@ -151,6 +144,7 @@ namespace MultiplayerSFS.Mod.Patches
             {
                 if (ClientManager.multiplayerEnabled && GameManager.main != null)
                 {
+                    // ? This mod uses `(DestructionReason) 4` as a way to signal that the server has told the client to destroy this part.
                     if (reason == (DestructionReason) 4)
                     {
                         // * This part was intentionally destroyed by the server (e.g. another player's rocket crashed).
@@ -183,38 +177,72 @@ namespace MultiplayerSFS.Mod.Patches
                         );
                         return true;
                     }
-                    // ? This mod uses `(DestructionReason) 4` as a way to signal that the server has told the client to destroy this part.
-                    return reason == (DestructionReason) 4;
+                    return false;
                 }
                 return true;
             }
         }
 
         /// <summary>
-        /// Sends `UpdatePart` packets after each part has been used.
+        /// Syncs the creation of 'child' rockets, which result from part destruction, split modules, etc.
+        /// This patch also prevents child rockets from being created if the local player doesn't have update authority over the parent rocket.
         /// </summary>
-        [HarmonyPatch(typeof(Rocket), nameof(Rocket.UseParts))]
-        public class Rocket_UseParts
+        [HarmonyPatch(typeof(JointGroup), nameof(JointGroup.RecreateRockets))]
+        public class JointGroup_RecreateRockets
         {
-            public static void Prefix((Part, PolygonData)[] regions)
+            public static void Postfix(Rocket rocket, List<Rocket> childRockets)
             {
                 if (ClientManager.multiplayerEnabled)
                 {
-                    foreach ((Part part, PolygonData _) in regions)
+                    if (childRockets.Count == 0)
                     {
-                        // * I don't think this needs a check to ensure the rocket is under this client's authority,
-                        // * since (at least in vanilla) parts can't be activated by a rocket that isn't currently controlled.
+                        // * `RecreateRockets` resulted in no change to the rocket, and so it does not need to be re-synced.
+                        return;
+                    }
 
-                        int rocketId = LocalManager.GetLocalRocketID(part.Rocket);
-                        int partId = LocalManager.GetLocalPartID(rocketId, part);
-                        PartState state = new PartState(new PartSave(part));
+                    int rocketId = LocalManager.GetLocalRocketID(rocket);
+                    if (rocketId == -1)
+                    {
+                        // * The rocket isn't synced yet.
+                        // TODO: idk what the best thing to do when the rocket isn't synced yet, so I'll ignore it for now :)
+                        return;
+                    }
+
+                    if (!LocalManager.updateAuthority.Contains(rocketId))
+                    {
+                        // * Players that don't have update authority over `rocket` shouldn't spawn child rockets.
+                        foreach (Rocket child in childRockets)
+                        {
+                            RocketManager.DestroyRocket(child, DestructionReason.Intentional);
+                        }
+                        return;
+                    }
+
+                    // * Sync the parent rocket with the server.
+                    Debug.Log("+++");
+                    Debug.Log(rocket.partHolder.partsSet.Count);
+                    LocalRocket localRocket = LocalManager.syncedRockets[rocketId];
+                    ClientManager.SendPacket
+                    (
+                        new Packet_CreateRocket()
+                        {
+                            GlobalId = rocketId,
+                            Rocket = localRocket.ToState(),
+                        }
+                    );
+
+                    Debug.Log("---");
+                    foreach (Rocket child in childRockets)
+                    {
+                        Debug.Log(child.partHolder.partsSet.Count);
+                        LocalRocket localChild = new LocalRocket(child);
+                        int localId = LocalManager.unsyncedRockets.InsertNew(localChild);
                         ClientManager.SendPacket
                         (
-                            new Packet_UpdatePart()
+                            new Packet_CreateRocket()
                             {
-                                RocketId = rocketId,
-                                PartId = partId,
-                                NewPart = state
+                                LocalId = localId,
+                                Rocket = localChild.ToState(),
                             }
                         );
                     }
@@ -271,56 +299,6 @@ namespace MultiplayerSFS.Mod.Patches
                     else
                     {
                         Debug.LogError("Missing local rocket when trying to send staging update!");
-                    }
-                }
-            }
-        }
-
-        /// <summary>
-        /// Syncs the creation of 'child' rockets, which result from part destruction, split modules, etc.
-        /// This patch also prevents child rockets from being created if the local player doesn't have update authority over the parent rocket.
-        /// </summary>
-        [HarmonyPatch(typeof(JointGroup), nameof(JointGroup.RecreateRockets))]
-        public class JointGroup_RecreateRockets
-        {
-            public static bool Prefix(Rocket rocket)
-            {
-                if (ClientManager.multiplayerEnabled)
-                {
-                    int rocketId = LocalManager.GetLocalRocketID(rocket);
-                    return LocalManager.updateAuthority.Contains(rocketId);
-                }
-                return true;
-            }
-            public static void Postfix(Rocket rocket, List<Rocket> childRockets)
-            {
-                if (ClientManager.multiplayerEnabled)
-                {
-                    int rocketId = LocalManager.GetLocalRocketID(rocket);
-                    LocalRocket localRocket = LocalManager.syncedRockets[rocketId];
-                    ClientManager.SendPacket
-                    (
-                        new Packet_CreateRocket()
-                        {
-                            PlayerId = ClientManager.playerId,
-                            GlobalId = rocketId,
-                            Rocket = localRocket.ToState(),
-                        }
-                    );
-                    foreach (Rocket cr in childRockets)
-                    {
-                        LocalRocket lr = new LocalRocket(cr);
-                        int localId = LocalManager.unsyncedRockets.InsertNew(lr);
-                        RocketState state = lr.ToState();
-                        ClientManager.SendPacket
-                        (
-                            new Packet_CreateRocket()
-                            {
-                                PlayerId = ClientManager.playerId,
-                                LocalId = localId,
-                                Rocket = state,
-                            }
-                        );
                     }
                 }
             }

@@ -220,7 +220,6 @@ namespace MultiplayerSFS.Mod
                 if (players[ClientManager.playerId].currentRocket == packet.GlobalId)
                 {
                     // * Complete resync was sent for this client's rocket.
-                    // PlayerController.main.SmoothChangePlayer(synced.rocket);
                     PlayerController.main.player.Value = synced.rocket;
                 }
             }
@@ -247,67 +246,6 @@ namespace MultiplayerSFS.Mod
                 rocket.rocket.throttle.throttlePercent.Value = packet.ThrottlePercent;
                 rocket.rocket.throttle.throttleOn.Value = packet.ThrottleOn;
                 rocket.rocket.physics.SetLocationAndState(packet.Location.GetSaveLocation(WorldTime.main.worldTime), true);
-            }
-        }
-
-        public static void UpdateLocalPart(Packet_UpdatePart packet)
-        {
-            if (syncedRockets.TryGetValue(packet.RocketId, out LocalRocket localRocket) && localRocket.rocket is Rocket rocket)
-            {
-                if (localRocket.parts.TryGetValue(packet.PartId, out Part oldPart) && oldPart != null)
-                {
-                    Part newPart = SpawnLocalPart(packet.NewPart, oldPart.transform.parent);
-
-                    localRocket.parts[packet.PartId] = newPart;
-
-                    // ? Most of the following is a loose recreation of `Rocket.SetParts`, but instead for updating a single part.
-                    // ? Methods like `PartHolder.AddParts` and `PartHolder.RemoveParts` have to be avoided,
-                    // ? since they act as if the part is completely new and not a recreation of an existing part.
-
-                    // * Update the part holder of the `rocket`.
-                    rocket.partHolder.parts.Remove(oldPart);
-                    rocket.partHolder.partsSet.Remove(oldPart);
-                    rocket.partHolder.parts.Add(newPart);
-                    rocket.partHolder.partsSet.Add(newPart);
-
-                    rocket.partHolder.FieldRef<Part[]>("cachedArray") = null;
-                    rocket.partHolder.FieldRef<Dictionary<string, object>>("modules").Clear();
-                    rocket.partHolder.FieldRef<Dictionary<string, int>>("moduleCount").Clear();
-
-                    // * Update joints containing `oldPart`.
-                    foreach (PartJoint joint in rocket.jointsGroup.GetConnectedJoints(oldPart))
-                    {
-                        if (joint.a == oldPart)
-                            rocket.jointsGroup.AddJoint(new PartJoint(newPart, joint.b, joint.anchor));
-                        else
-                            rocket.jointsGroup.AddJoint(new PartJoint(joint.a, newPart, joint.anchor));
-                    }
-                    rocket.jointsGroup.RemovePartAndItsJoints(oldPart);
-
-                    // * Update stages containing `oldPart`.
-                    foreach (Stage stage in rocket.staging.stages)
-                    {
-                        if (stage.parts.Contains(oldPart))
-                        {
-                            stage.RemovePart(oldPart, false);
-                            stage.AddPart(newPart, false, false);
-                        }
-                    }
-
-                    rocket.FieldRef<List<(ResourceModule[], ResourceModule)>>("pipeFlows").Clear();
-
-                    oldPart.DestroyPart(false, false, (DestructionReason) 4);
-
-                    WorldEventSyncing.Rocket_InjectPartDependencies.InjectPartDependencies(rocket);
-                    rocket.rb2d.mass = rocket.mass.GetMass();
-                    rocket.rb2d.centerOfMass = rocket.mass.GetCenterOfMass();
-
-                    // TODO: Various bits of code related to flow and resource modules, docking ports, etc may need to be added, idk.
-                }
-                else
-                {
-                    Debug.LogError("Missing local part when trying to update!");
-                }
             }
         }
 

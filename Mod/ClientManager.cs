@@ -7,10 +7,12 @@ using UnityEngine;
 using Lidgren.Network;
 using SFS;
 using SFS.UI;
+using SFS.Parts;
 using SFS.World;
+using SFS.Variables;
 using SFS.WorldBase;
 using MultiplayerSFS.Common;
-using SFS.Variables;
+using SFS.Parts.Modules;
 
 namespace MultiplayerSFS.Mod
 {
@@ -206,15 +208,17 @@ namespace MultiplayerSFS.Mod
                     OnPacket_UpdateRocket(msg);
                     break;
 
-                // * Part packets
-                case PacketType.UpdatePart:
-                    OnPacket_UpdatePart(msg);
+                // * Part & Staging Packets
+                case PacketType.UpdatePart_EngineModule:
+                    OnPacket_UpdatePart_EngineModule(msg);
+                    break;
+                case PacketType.UpdatePart_ParachuteModule:
+                    OnPacket_UpdatePart_ParachuteModule(msg);
                     break;
                 case PacketType.DestroyPart:
                     OnPacket_DestroyPart(msg);
                     break;
                 case PacketType.UpdateStaging:
-                    // ! TODO
                     OnPacket_UpdateStaging(msg);
                     break;
                 
@@ -307,20 +311,6 @@ namespace MultiplayerSFS.Mod
             }
         }
 
-        static void OnPacket_UpdatePart(NetIncomingMessage msg)
-        {
-            Packet_UpdatePart packet = msg.Read<Packet_UpdatePart>();
-            if (world.rockets.TryGetValue(packet.RocketId, out RocketState state))
-            {
-                state.UpdatePart(packet.PartId, packet.NewPart);
-                LocalManager.UpdateLocalPart(packet);
-            }
-            else
-            {
-                Debug.LogError($"Missing rocket from world state!");
-            }
-        }
-
         static void OnPacket_DestroyPart(NetIncomingMessage msg)
         {
             Packet_DestroyPart packet = msg.Read<Packet_DestroyPart>();
@@ -338,6 +328,57 @@ namespace MultiplayerSFS.Mod
             {
                 state.stages = packet.Stages;
                 LocalManager.UpdateLocalStaging(packet);
+            }
+        }
+
+        static void OnPacket_UpdatePart_EngineModule(NetIncomingMessage msg)
+        {
+            Packet_UpdatePart_EngineModule packet = msg.Read<Packet_UpdatePart_EngineModule>();
+            if (world.rockets.TryGetValue(packet.RocketId, out RocketState rocketState))
+            {
+                if (rocketState.parts.TryGetValue(packet.PartId, out PartState partState))
+				{
+					partState.part.TOGGLE_VARIABLES["engine_on"] = packet.EngineOn;
+				}
+                
+                if (LocalManager.syncedRockets.TryGetValue(packet.RocketId, out LocalRocket rocket))
+                {
+                    if (rocket.parts.TryGetValue(packet.PartId, out Part part))
+                    {
+                        part.GetModules<EngineModule>()[0].engineOn.Value = packet.EngineOn;
+                    }
+                }
+            }
+            else
+            {
+                Debug.LogError($"Missing rocket from world state!");
+            }
+        }
+
+        static void OnPacket_UpdatePart_ParachuteModule(NetIncomingMessage msg)
+        {
+            Packet_UpdatePart_ParachuteModule packet = msg.Read<Packet_UpdatePart_ParachuteModule>();
+            if (world.rockets.TryGetValue(packet.RocketId, out RocketState rocketState))
+            {
+                if (rocketState.parts.TryGetValue(packet.PartId, out PartState partState))
+				{
+					partState.part.NUMBER_VARIABLES["animation_state"] = packet.State;
+					partState.part.NUMBER_VARIABLES["deploy_state"] = packet.TargetState;
+				}
+                
+                if (LocalManager.syncedRockets.TryGetValue(packet.RocketId, out LocalRocket rocket))
+                {
+                    if (rocket.parts.TryGetValue(packet.PartId, out Part part))
+                    {
+                        ParachuteModule parachute = part.GetModules<ParachuteModule>()[0];
+                        parachute.state.Value = (float) packet.State;
+                        parachute.targetState.Value = (float) packet.TargetState;
+                    }
+                }
+            }
+            else
+            {
+                Debug.LogError($"Missing rocket from world state!");
             }
         }
     }

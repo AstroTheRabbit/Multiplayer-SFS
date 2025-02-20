@@ -145,21 +145,15 @@ namespace MultiplayerSFS.Common
         }
 
         /// <summary>
-        /// Returns true if the part was found and updated, otherwise returns false.
-        /// </summary>
-        public bool UpdatePart(int id, PartState newPart)
-        {
-            bool found = parts.Remove(id);
-            parts.Add(id, newPart);
-            return found;
-        }
-
-        /// <summary>
         /// Returns true if the part was found and removed, otherwise returns false.
         /// </summary>
         public bool RemovePart(int id)
         {
-            // TODO: Need to think of a good way to update & sync joints/stages that contained the destroyed part.
+            joints.RemoveAll(j => j.id_A == id || j.id_B == id);
+            foreach (StageState stage in stages)
+            {
+                stage.partIDs.RemoveAll(p => p == id);
+            }
             return parts.Remove(id);
         }
 

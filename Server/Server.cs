@@ -1,11 +1,10 @@
 using System;
 using System.Net;
 using System.Linq;
+using System.Timers;
 using System.Collections.Generic;
 using Lidgren.Network;
 using MultiplayerSFS.Common;
-using System.Timers;
-using UnityEngine.Lumin;
 
 namespace MultiplayerSFS.Server
 {
@@ -17,7 +16,6 @@ namespace MultiplayerSFS.Server
 		public static Dictionary<IPEndPoint, ConnectedPlayer> connectedPlayers;
 
 		public static Timer resyncTimer;
-		public static Timer authorityTimer;
 
 		public static void Initialize(ServerSettings settings)
 		{
@@ -41,15 +39,6 @@ namespace MultiplayerSFS.Server
 				resyncTimer.Elapsed += (object source, ElapsedEventArgs e) => OnCompleteResync();
 				resyncTimer.Enabled = true;
 			}
-
-			if (settings.updateAuthoritiesPeriod <= 0)
-			{
-				Logger.Error("The setting `updateAuthoritiesPeriod` cannot be less than or equal to 0!");
-				return;
-			}
-			authorityTimer = new Timer(1000 * settings.updateAuthoritiesPeriod);
-			authorityTimer.Elapsed += (object source, ElapsedEventArgs e) => UpdatePlayerAuthorities();
-			authorityTimer.Enabled = true;
 
             server = new NetServer(npc);
 			server.Start();
@@ -207,7 +196,7 @@ namespace MultiplayerSFS.Server
 				new Packet_JoinResponse()
 				{
 					PlayerId = newPlayer.id,
-					UpdateRocketsPeriod = settings.updateAuthoritiesPeriod,
+					UpdateRocketsPeriod = settings.updateRocketsPeriod,
 					WorldTime = world.worldTime,
 					Difficulty = world.difficulty,
 				}
@@ -375,8 +364,8 @@ namespace MultiplayerSFS.Server
         static void OnIncomingPacket(NetIncomingMessage msg)
         {
             PacketType packetType = (PacketType) msg.ReadByte();
-			// Logger.Debug($"Packet Bits: {msg.LengthBits}");
-			// Logger.Debug($"Recieved packet of type '{packetType}'.");
+			if (packetType != PacketType.UpdateRocket)
+				Logger.Debug($"Recieved packet of type '{packetType}'.");
 			switch (packetType)
 			{
 				case PacketType.UpdatePlayerControl:
@@ -393,14 +382,17 @@ namespace MultiplayerSFS.Server
 					OnPacket_UpdateRocket(msg);
 					break;
 
-				case PacketType.UpdatePart:
-					OnPacket_UpdatePart(msg);
-					break;
 				case PacketType.DestroyPart:
 					OnPacket_DestroyPart(msg);
 					break;
 				case PacketType.UpdateStaging:
 					OnPacket_UpdateStaging(msg);
+					break;
+				case PacketType.UpdatePart_EngineModule:
+					OnPacket_UpdatePart_EngineModule(msg);
+					break;
+				case PacketType.UpdatePart_ParachuteModule:
+					OnPacket_UpdatePart_ParachuteModule(msg);
 					break;
 				
 				case PacketType.JoinRequest:
@@ -423,7 +415,7 @@ namespace MultiplayerSFS.Server
 		static void OnPacket_UpdatePlayerControl(NetIncomingMessage msg)
 		{
 			Packet_UpdatePlayerControl packet = msg.Read<Packet_UpdatePlayerControl>();
-			if (connectedPlayers.TryGetValue(msg.SenderEndPoint, out ConnectedPlayer player))
+			if (FindPlayer(msg.SenderConnection) is ConnectedPlayer player)
 			{
 				if (player.id == packet.PlayerId)
 				{
@@ -451,13 +443,16 @@ namespace MultiplayerSFS.Server
 			Packet_CreateRocket packet = msg.Read<Packet_CreateRocket>();
 			if (world.rockets.ContainsKey(packet.GlobalId))
             {
+				Logger.Debug($"existing: {packet.Rocket.parts.Count}");
                 world.rockets[packet.GlobalId] = packet.Rocket;
             	SendPacketToAll(packet, msg.SenderConnection);
             }
             else
             {
+				Logger.Debug($"new: {packet.Rocket.parts.Count}");
                 packet.GlobalId = world.rockets.InsertNew(packet.Rocket);
             	SendPacketToAll(packet);
+				UpdatePlayerAuthorities();
             }
 
 		}
@@ -466,7 +461,10 @@ namespace MultiplayerSFS.Server
 		{
 			Packet_DestroyRocket packet = msg.Read<Packet_DestroyRocket>();
 			if (world.rockets.Remove(packet.Id))
-				SendPacketToAll(packet, msg.SenderConnection);
+            {
+                SendPacketToAll(packet, msg.SenderConnection);
+            	UpdatePlayerAuthorities();
+            }
 		}
 
 		static void OnPacket_UpdateRocket(NetIncomingMessage msg)
@@ -479,13 +477,30 @@ namespace MultiplayerSFS.Server
 			}
 		}
 
-		static void OnPacket_UpdatePart(NetIncomingMessage msg)
+		static void OnPacket_UpdatePart_EngineModule(NetIncomingMessage msg)
 		{
-			Packet_UpdatePart packet = msg.Read<Packet_UpdatePart>();
+			Packet_UpdatePart_EngineModule packet = msg.Read<Packet_UpdatePart_EngineModule>();
 			if (world.rockets.TryGetValue(packet.RocketId, out RocketState state))
 			{
-				if (state.UpdatePart(packet.PartId, packet.NewPart))
+				if (state.parts.TryGetValue(packet.PartId, out PartState part))
+				{
+					part.part.TOGGLE_VARIABLES["engine_on"] = packet.EngineOn;
 					SendPacketToAll(packet, msg.SenderConnection);
+				}
+			}
+		}
+
+		static void OnPacket_UpdatePart_ParachuteModule(NetIncomingMessage msg)
+		{
+			Packet_UpdatePart_ParachuteModule packet = msg.Read<Packet_UpdatePart_ParachuteModule>();
+			if (world.rockets.TryGetValue(packet.RocketId, out RocketState state))
+			{
+				if (state.parts.TryGetValue(packet.PartId, out PartState part))
+				{
+					part.part.NUMBER_VARIABLES["animation_state"] = packet.State;
+					part.part.NUMBER_VARIABLES["deploy_state"] = packet.TargetState;
+					SendPacketToAll(packet, msg.SenderConnection);
+				}
 			}
 		}
 
