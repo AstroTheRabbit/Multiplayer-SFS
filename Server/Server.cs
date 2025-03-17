@@ -298,7 +298,7 @@ namespace MultiplayerSFS.Server
 			}
 
 			// * No players are connected or controlling rockets.
-			if (connectedPlayers.All((KeyValuePair<IPEndPoint, ConnectedPlayer> kvp) => kvp.Value.controlledRocket < 0))
+			if (connectedPlayers.All(kvp => kvp.Value.controlledRocket < 0))
             {
                 return;
             }

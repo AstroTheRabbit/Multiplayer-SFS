@@ -37,7 +37,7 @@ namespace MultiplayerSFS.Mod.Patches
                     if (newPlayer is Rocket rocket)
                     {
                         int rocketId = LocalManager.GetLocalRocketID(rocket);
-                        if (rocketId == -1 || LocalManager.players.Values.Any((LocalPlayer player) => player.currentRocket == rocketId))
+                        if (rocketId == -1 || LocalManager.players.Values.Any(player => player.currentRocket == rocketId))
                         {
                             // * Cannot switch to an unsynced rocket or a rocket that's already controlled by another player.
                             return oldPlayer;
@@ -84,52 +84,68 @@ namespace MultiplayerSFS.Mod.Patches
         /// Syncs the newly created rockets of a launched blueprint with the multiplayer server.
         /// </summary>
         [HarmonyPatch(typeof(RocketManager), nameof(RocketManager.SpawnBlueprint))]
+        [HarmonyDebug]
         public class RocketManager_SpawnBlueprint
         {
-            public static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions)
+            public static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions, ILGenerator generator)
             {
-                // ? Replaces `Rocket rocket = array3.FirstOrDefault((Rocket a) => a.hasControl.Value); ...` with `SyncLaunch(Rocket[]);`.
+                // ? Wraps `Rocket rocket = array3.FirstOrDefault((Rocket a) => a.hasControl.Value); ...`
+                // ? in an if statement that instead calls `SyncLaunch(Rocket[]);` if the client is currently in multiplayer.
+
+                Label label_multiplayer = generator.DefineLabel();
+                bool found_ldloc = false;
+
                 foreach (CodeInstruction code in instructions)
                 {
-                    yield return code;
-                    if (code.opcode == OpCodes.Ldloc_3)
+                    if (!found_ldloc && code.opcode == OpCodes.Ldloc_3)
                     {
+                        found_ldloc = true;
+
+                        // * Jump to original code if not in multiplayer.
+                        yield return CodeInstruction.Call(typeof(RocketManager_SpawnBlueprint), nameof(GetInMultiplayer));
+                        yield return new CodeInstruction(OpCodes.Brfalse, label_multiplayer);
+
+                        // * Call `SyncLaunch(Rocket[])` and return.
+                        yield return new CodeInstruction(OpCodes.Ldloc_3);
                         yield return CodeInstruction.Call(typeof(RocketManager_SpawnBlueprint), nameof(SyncLaunch));
                         yield return new CodeInstruction(OpCodes.Ret);
-                        break;
+
+                        yield return code.WithLabels(label_multiplayer);
                     }
+                    else
+                    {
+                        yield return code;
+                    }
+
                 }
+            }
+
+            public static bool GetInMultiplayer()
+            {
+                return ClientManager.multiplayerEnabled;
             }
 
             public static void SyncLaunch(Rocket[] rockets)
             {
-                if (ClientManager.multiplayerEnabled)
+                Menu.loading.Open("Sending launch request to server...");
+                Dictionary<Rocket, int> locals = new Dictionary<Rocket, int>(rockets.Length);
+                foreach (Rocket rocket in rockets)
                 {
-                    Menu.loading.Open("Sending launch request to server...");
-                    Dictionary<Rocket, int> locals = new Dictionary<Rocket, int>(rockets.Length);
-                    foreach (Rocket rocket in rockets)
-                    {
-                        LocalRocket lr = new LocalRocket(rocket);
-                        int localId = LocalManager.unsyncedRockets.InsertNew(lr);
-                        ClientManager.SendPacket
-                        (
-                            new Packet_CreateRocket()
-                            {
-                                LocalId = localId,
-                                Rocket = lr.ToState(),
-                            }
-                        );
-                        locals.Add(rocket, localId);
-                    }
-                    Rocket controllable = rockets.FirstOrDefault(r => r.hasControl.Value);
-                    Rocket toControl = controllable ?? ((rockets.Length != 0) ? rockets[0] : null);
-                    LocalManager.unsyncedToControl = toControl != null && locals.TryGetValue(toControl, out int idToControl) ? idToControl : -1;
+                    LocalRocket lr = new LocalRocket(rocket);
+                    int localId = LocalManager.unsyncedRockets.InsertNew(lr);
+                    ClientManager.SendPacket
+                    (
+                        new Packet_CreateRocket()
+                        {
+                            LocalId = localId,
+                            Rocket = lr.ToState(),
+                        }
+                    );
+                    locals.Add(rocket, localId);
                 }
-                else
-                {
-                    Rocket rocket = rockets.FirstOrDefault(r => r.hasControl.Value);
-	                PlayerController.main.player.Value = rocket ?? ((rockets.Length != 0) ? rockets[0] : null);
-                }
+                Rocket controllable = rockets.FirstOrDefault(r => r.hasControl.Value);
+                Rocket toControl = controllable ?? ((rockets.Length != 0) ? rockets[0] : null);
+                LocalManager.unsyncedToControl = toControl != null && locals.TryGetValue(toControl, out int idToControl) ? idToControl : -1;
             }
         }
 
@@ -218,34 +234,44 @@ namespace MultiplayerSFS.Mod.Patches
                         return;
                     }
 
-                    // * Sync the parent rocket with the server.
-                    Debug.Log("+++");
-                    Debug.Log(rocket.partHolder.partsSet.Count);
                     LocalRocket localRocket = LocalManager.syncedRockets[rocketId];
-                    ClientManager.SendPacket
-                    (
-                        new Packet_CreateRocket()
-                        {
-                            GlobalId = rocketId,
-                            Rocket = localRocket.ToState(),
-                        }
-                    );
-
-                    Debug.Log("---");
+                    RocketState localState = localRocket.ToState();
                     foreach (Rocket child in childRockets)
                     {
-                        Debug.Log(child.partHolder.partsSet.Count);
                         LocalRocket localChild = new LocalRocket(child);
+                        RocketState localChildState = localChild.ToState();
                         int localId = LocalManager.unsyncedRockets.InsertNew(localChild);
+
+                        // TODO: This is a "temorary" fix for the weird "duplicating part" bug.
+                        // * Remove seperated parts from the parent rocket.
+                        foreach (KeyValuePair<int, Part> kvp in localChild.parts)
+                        {
+                            int id = localRocket.GetPartID(kvp.Value);
+                            bool succ = localState.RemovePart(id);
+                            Debug.Log($"{id} was succ? {succ}");
+
+                        }
+
+                        // * Sync new child rockets with the server.
                         ClientManager.SendPacket
                         (
                             new Packet_CreateRocket()
                             {
                                 LocalId = localId,
-                                Rocket = localChild.ToState(),
+                                Rocket = localChildState,
                             }
                         );
                     }
+
+                    // * Sync the parent rocket with the server.
+                    ClientManager.SendPacket
+                    (
+                        new Packet_CreateRocket()
+                        {
+                            GlobalId = rocketId,
+                            Rocket = localState,
+                        }
+                    );
                 }
             }
         }

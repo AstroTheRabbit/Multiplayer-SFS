@@ -237,7 +237,7 @@ namespace MultiplayerSFS.Mod
 
         public static void SendPacket(Packet packet, NetDeliveryMethod method = NetDeliveryMethod.ReliableOrdered)
         {
-            // Debug.Log($"Sending packet of type {packet.Type}.");
+            Debug.Log($"Sending packet of type {packet.Type}.");
             NetOutgoingMessage msg = client.CreateMessage();
             msg.Write((byte) packet.Type);
             msg.Write(packet);

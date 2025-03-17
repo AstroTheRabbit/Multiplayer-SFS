@@ -24,6 +24,7 @@ namespace MultiplayerSFS.Mod.Patches
         {
             public static void Prefix(Rocket rocket_A, Part part_A, Rocket rocket_B, Part part_B, out int __state)
             {
+                // TODO!: This is broken - the create rocket packet seemingly isn't being sent.
                 if (rocket_A == rocket_B || !ClientManager.multiplayerEnabled)
                 {
                     __state = -1;

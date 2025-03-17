@@ -40,7 +40,7 @@ namespace MultiplayerSFS.Common
         /// </summary>
         CreateRocket,
         /// <summary>
-        /// Sent whenever a rocket is destroyed (include events such as docking, where two rockets are merged).
+        /// Sent whenever a rocket is destroyed (includes events such as docking, where two rockets are merged).
         /// </summary>
         DestroyRocket,
         /// <summary>

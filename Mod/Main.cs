@@ -6,6 +6,7 @@ using SFS.IO;
 using SFS.UI;
 using SFS.Audio;
 using SFS.Translations;
+using SFS.World;
 
 namespace MultiplayerSFS.Mod
 {
@@ -37,10 +38,19 @@ namespace MultiplayerSFS.Mod
 
         public override void Load()
         {
+            // ! VID CREATION ONLY
+            SceneHelper.OnWorldSceneLoaded += (System.Action) delegate {
+                if (ClientManager.multiplayerEnabled)
+                {
+                    // SandboxSettings.main.settings.noGravity = true;
+                    SandboxSettings.main.settings.infiniteFuel = true;
+                    SandboxSettings.main.settings.noHeatDamage = true;
+                }
+            };
             AddMultiplayerButton();
             SceneHelper.OnHomeSceneLoaded += AddMultiplayerButton;
             buildPersistentFolder = new FolderPath(ModFolder).Extend(".BlueprintPersistent");
-            ClientManager.multiplayerEnabled.OnChange += (bool value) => { Application.runInBackground = value; };
+            ClientManager.multiplayerEnabled.OnChange += value => { Application.runInBackground = value; };
         }
 
         public static void AddMultiplayerButton()

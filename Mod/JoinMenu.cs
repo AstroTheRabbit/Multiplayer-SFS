@@ -1,5 +1,7 @@
 using System;
 using System.Net;
+using System.Linq;
+using System.Threading.Tasks;
 using UnityEngine;
 using SFS.UI;
 using SFS.Input;
@@ -10,7 +12,7 @@ namespace MultiplayerSFS.Mod
 {
     public class JoinInfo
     {
-        public IPAddress address = IPAddress.Parse("10.0.0.72"); // ! FOR TESTING ONLY
+        public IPAddress address = IPAddress.Parse("10.0.0.3"); // ! FOR TESTING ONLY
         public int port = 9806;
         public string username = "DEFAULT_USERNAME";
         public string password = "DEFAULT_PASSWORD";
@@ -84,9 +86,9 @@ namespace MultiplayerSFS.Mod
 
             Builder.CreateLabel(settingLabels, 300, 50, text: "IP Address").TextAlignment = TMPro.TextAlignmentOptions.MidlineLeft;
             input_address = Builder.CreateTextInput(settingsValues, 620, 50, text: joinInfo.address.ToString(),
-                onChange: (string input) =>
+                onChange: async input =>
                 {
-                    if (IPAddress.TryParse(input, out IPAddress result))
+                    if (await TryParseAddress(input) is IPAddress result)
                     {
                         input_address.FieldColor = defaultTextInputColor;
                         joinInfo.address = result;
@@ -97,13 +99,13 @@ namespace MultiplayerSFS.Mod
                     }
                 }
             );
-            input_address.field.onEndEdit.AddListener((string input) => input_address.Text = IPAddress.Parse(input).ToString());
+            // input_address.field.onEndEdit.AddListener((string input) => input_address.Text = IPAddress.Parse(input).ToString());
             defaultTextInputColor = input_address.FieldColor;
             
 
             Builder.CreateLabel(settingLabels, 300, 50, text: "Port").TextAlignment = TMPro.TextAlignmentOptions.MidlineLeft;
             input_port = Builder.CreateTextInput(settingsValues, 620, 50, text: joinInfo.port.ToString(),
-                onChange: (string input) =>
+                onChange: input =>
                 {
                     if (int.TryParse(input, out int result))
                     {
@@ -119,7 +121,7 @@ namespace MultiplayerSFS.Mod
 
             Builder.CreateLabel(settingLabels, 300, 50, text: "Username").TextAlignment = TMPro.TextAlignmentOptions.MidlineLeft;
             input_username = Builder.CreateTextInput(settingsValues, 620, 50, text: joinInfo.username,
-                onChange: (string input) =>
+                onChange: input =>
                 {
                     
                     input_username.Text = joinInfo.username = input.Trim();
@@ -129,8 +131,8 @@ namespace MultiplayerSFS.Mod
 
             Builder.CreateLabel(settingLabels, 300, 50, text: "Password").TextAlignment = TMPro.TextAlignmentOptions.MidlineLeft;
             input_password = Builder.CreateTextInput(settingsValues, 620, 50, text: joinInfo.password,
-            onChange: (string input) =>
-                {
+            onChange: input =>
+            {
                     joinInfo.password = input;
                     input_password.FieldColor = defaultTextInputColor;
                 }
@@ -151,7 +153,7 @@ namespace MultiplayerSFS.Mod
                 input_username.FieldColor  = defaultTextInputColor;
                 input_password.FieldColor  = defaultTextInputColor;
 
-                if (!IPAddress.TryParse(input_address.Text, out IPAddress _))
+                if (TryParseAddress(input_address.Text) is null)
                 {
                     input_address.FieldColor = Color.red;
                     MsgDrawer.main.Log("IP address is invalid");
@@ -184,6 +186,26 @@ namespace MultiplayerSFS.Mod
                     MsgDrawer.main.Log("An error occured... (Check console)");
                     Debug.LogError(e);
                 }
+            }
+        }
+
+        static async Task<IPAddress> TryParseAddress(string input)
+        {
+            if (IPAddress.TryParse(input, out IPAddress ip))
+            {
+                return ip;
+            }
+            try
+            {
+                if ((await Dns.GetHostAddressesAsync(input)).First() is IPAddress res)
+                {
+                    return res;
+                }
+                return null;
+            }
+            catch
+            {
+                return null;
             }
         }
     }

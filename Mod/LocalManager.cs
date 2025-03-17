@@ -332,7 +332,7 @@ namespace MultiplayerSFS.Mod
         /// </summary>
         public int GetPartID(Part part)
         {
-            if (parts.FirstOrDefault(p => p.Value == part) is KeyValuePair<int, Part> kvp)
+            if (parts.FirstOrDefault(p => p.Value == part) is KeyValuePair<int, Part> kvp && kvp.Value != null)
                 return kvp.Key;
             else
                 return -1;
