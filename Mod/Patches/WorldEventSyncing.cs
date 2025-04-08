@@ -1,90 +1,25 @@
-using System;
 using System.Linq;
 using System.Reflection;
+using System.Reflection.Emit;
 using System.Collections.Generic;
 using UnityEngine;
 using HarmonyLib;
 using SFS.UI;
 using SFS.World;
 using SFS.Parts;
-using SFS.Parts.Modules;
 using MultiplayerSFS.Common;
-using System.Reflection.Emit;
 
 namespace MultiplayerSFS.Mod.Patches
 {
     /// <summary>
-    /// Patches related to syncing world events (like players switching rockets) with the multiplayer server.
+    /// Patches related to syncing world events with the multiplayer server.
     /// </summary>
     public class WorldEventSyncing
     {
         /// <summary>
-        /// Prevents a player from switching to a rocket that is already controlled by another player in multiplayer.
-        /// </summary>
-        [HarmonyPatch(typeof(PlayerController), "Start")]
-        public class PlayerController_Start
-        {
-            public static void Postfix(PlayerController __instance)
-            {
-                __instance.player.Filter = CheckSwitchRocket;
-            }
-
-            static Player CheckSwitchRocket(Player oldPlayer, Player newPlayer)
-            {
-                // TODO: When a switch is prevented, the camera still pans as if it were switching.
-                if (ClientManager.multiplayerEnabled.Value)
-                {
-                    if (newPlayer is Rocket rocket)
-                    {
-                        int rocketId = LocalManager.GetLocalRocketID(rocket);
-                        if (rocketId == -1 || LocalManager.players.Values.Any(player => player.currentRocket == rocketId))
-                        {
-                            // * Cannot switch to an unsynced rocket or a rocket that's already controlled by another player.
-                            return oldPlayer;
-                        }
-                        else
-                        {
-                            ClientManager.SendPacket
-                            (
-                                new Packet_UpdatePlayerControl()
-                                {
-                                    PlayerId = ClientManager.playerId,
-                                    RocketId = rocketId,
-                                }
-                            );
-                            return newPlayer;
-                        }
-                    }
-                    else if (newPlayer != null)
-                    {
-                        Debug.LogError("Unsupported `Player` type in multiplayer!");
-                        return oldPlayer;
-                    }
-                    else
-                    {
-                        ClientManager.SendPacket
-                        (
-                            new Packet_UpdatePlayerControl()
-                            {
-                                PlayerId = ClientManager.playerId,
-                                RocketId = -1,
-                            }
-                        );
-                        return newPlayer;
-                    }
-                }
-                else
-                {
-                    return newPlayer;
-                }
-            }
-        }
-
-        /// <summary>
         /// Syncs the newly created rockets of a launched blueprint with the multiplayer server.
         /// </summary>
         [HarmonyPatch(typeof(RocketManager), nameof(RocketManager.SpawnBlueprint))]
-        [HarmonyDebug]
         public class RocketManager_SpawnBlueprint
         {
             public static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions, ILGenerator generator)
@@ -122,6 +57,7 @@ namespace MultiplayerSFS.Mod.Patches
 
             public static bool GetInMultiplayer()
             {
+                // TODO: This should probably be replaced with regular OpCode calls to load `ClientManager.multiplayerEnabled.Value`.
                 return ClientManager.multiplayerEnabled;
             }
 
@@ -156,18 +92,18 @@ namespace MultiplayerSFS.Mod.Patches
         [HarmonyPatch(typeof(Part), nameof(Part.DestroyPart))]
         public class Part_DestroyPart
         {
-            public static bool Prefix(Part __instance, bool createExplosion, bool updateJoints, DestructionReason reason)
+
+            public static bool Prefix(Part __instance, bool createExplosion, ref DestructionReason reason)
             {
                 if (ClientManager.multiplayerEnabled && GameManager.main != null)
                 {
-                    // ? This mod uses `(DestructionReason) 4` as a way to signal that the server has told the client to destroy this part.
-                    if (reason == (DestructionReason) 4)
+                    if (reason == LocalManager.CustomDestructionReason)
                     {
-                        // * This part was intentionally destroyed by the server (e.g. another player's rocket crashed).
+                        reason = LocalManager.TrueDestructionReason;
                         return true;
                     }
 
-                    int rocketId = LocalManager.GetLocalRocketID(__instance.Rocket);
+                    int rocketId = LocalManager.GetSyncedRocketID(__instance.Rocket);
                     if (rocketId == -1)
                     {
                         // * This part's rocket isn't synced, so we won't destroy it.
@@ -182,6 +118,7 @@ namespace MultiplayerSFS.Mod.Patches
                     if (LocalManager.updateAuthority.Contains(rocketId))
                     {
                         // * This client has update authority over the destroyed part's rocket.
+                        ClientManager.world.rockets[rocketId].RemovePart(partId);
                         ClientManager.SendPacket
                         (
                             new Packet_DestroyPart()
@@ -189,10 +126,49 @@ namespace MultiplayerSFS.Mod.Patches
                                 RocketId = rocketId,
                                 PartId = partId,
                                 CreateExplosion = createExplosion,
+                                Reason = reason,
                             }
                         );
                         return true;
                     }
+                    return false;
+                }
+                return true;
+            }
+        }
+
+        [HarmonyPatch(typeof(RocketManager), nameof(RocketManager.DestroyRocket))]
+        public static class RocketManager_DestroyRocket
+        {
+            public static bool Prefix(Rocket rocket, ref DestructionReason reason)
+            {
+                if (ClientManager.multiplayerEnabled)
+                {
+                    if (reason == LocalManager.CustomDestructionReason)
+                    {
+                        reason = LocalManager.TrueDestructionReason;
+                        return true;
+                    }
+
+                    int id = LocalManager.GetSyncedRocketID(rocket);
+                    // * `DestructionReason.Intentional` is a special case because of stuff like docking,
+                    // * where players that may not have update authority still need to be able to send a `DestroyRocket` packet.
+                    if (id >= 0 && (reason == DestructionReason.Intentional || LocalManager.updateAuthority.Contains(id)))
+                    {
+                        ClientManager.world.rockets.Remove(id);
+                        LocalManager.syncedRockets.Remove(id);
+                        LocalManager.updateAuthority.Remove(id);
+                        ClientManager.SendPacket
+                        (
+                            new Packet_DestroyRocket()
+                            {
+                                Id = id,
+                                Reason = reason,
+                            }
+                        );
+                        return true;
+                    }
+
                     return false;
                 }
                 return true;
@@ -216,7 +192,7 @@ namespace MultiplayerSFS.Mod.Patches
                         return;
                     }
 
-                    int rocketId = LocalManager.GetLocalRocketID(rocket);
+                    int rocketId = LocalManager.GetSyncedRocketID(rocket);
                     if (rocketId == -1)
                     {
                         // * The rocket isn't synced yet.
@@ -229,28 +205,22 @@ namespace MultiplayerSFS.Mod.Patches
                         // * Players that don't have update authority over `rocket` shouldn't spawn child rockets.
                         foreach (Rocket child in childRockets)
                         {
-                            RocketManager.DestroyRocket(child, DestructionReason.Intentional);
+                            RocketManager.DestroyRocket(child, LocalManager.CustomDestructionReason);
                         }
                         return;
                     }
 
                     LocalRocket localRocket = LocalManager.syncedRockets[rocketId];
-                    RocketState localState = localRocket.ToState();
+                    // * Remove parts that have been seperated from the parent rocket.
+                    localRocket.parts = localRocket.parts
+                        .Where(kvp => rocket.partHolder.partsSet.Contains(kvp.Value))
+                        .ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
+
                     foreach (Rocket child in childRockets)
                     {
                         LocalRocket localChild = new LocalRocket(child);
                         RocketState localChildState = localChild.ToState();
                         int localId = LocalManager.unsyncedRockets.InsertNew(localChild);
-
-                        // TODO: This is a "temorary" fix for the weird "duplicating part" bug.
-                        // * Remove seperated parts from the parent rocket.
-                        foreach (KeyValuePair<int, Part> kvp in localChild.parts)
-                        {
-                            int id = localRocket.GetPartID(kvp.Value);
-                            bool succ = localState.RemovePart(id);
-                            Debug.Log($"{id} was succ? {succ}");
-
-                        }
 
                         // * Sync new child rockets with the server.
                         ClientManager.SendPacket
@@ -264,6 +234,8 @@ namespace MultiplayerSFS.Mod.Patches
                     }
 
                     // * Sync the parent rocket with the server.
+                    RocketState localState = localRocket.ToState();
+                    ClientManager.world.rockets[rocketId] = localState;
                     ClientManager.SendPacket
                     (
                         new Packet_CreateRocket()
@@ -282,7 +254,7 @@ namespace MultiplayerSFS.Mod.Patches
         [HarmonyPatch]
         public class StagingUpdates
         {
-            static IEnumerable<MethodBase> TargetMethods()
+            public static IEnumerable<MethodBase> TargetMethods()
             {
                 string[] methods = new[]
                 {
@@ -300,7 +272,7 @@ namespace MultiplayerSFS.Mod.Patches
                 if (ClientManager.multiplayerEnabled)
                 {
                     Staging staging = __instance.FieldRef<Staging_Local>("staging").Value;
-                    int rocketId = LocalManager.GetLocalRocketID(staging.rocket);
+                    int rocketId = LocalManager.GetSyncedRocketID(staging.rocket);
                     if (GameManager.main != null && LocalManager.syncedRockets.TryGetValue(rocketId, out LocalRocket rocket))
                     {
                         List<StageState> stages = new List<StageState>(staging.stages.Count);
@@ -309,10 +281,11 @@ namespace MultiplayerSFS.Mod.Patches
                             StageState state = new StageState()
                             {
                                 stageID = stage.stageId,
-                                partIDs = stage.parts.Select(rocket.GetPartID).ToList(),
+                                partIDs = stage.parts.Select(rocket.GetPartID).Where(id => id >= 0).ToList(),
                             };
                             stages.Add(state);
                         }
+                        ClientManager.world.rockets[rocketId].stages = stages;
                         ClientManager.SendPacket
                         (
                             new Packet_UpdateStaging()

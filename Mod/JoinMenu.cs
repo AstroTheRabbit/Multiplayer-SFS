@@ -84,7 +84,7 @@ namespace MultiplayerSFS.Mod
             settingLabels.CreateLayoutGroup(Type.Vertical, childAlignment: TextAnchor.MiddleLeft);
             settingsValues.CreateLayoutGroup(Type.Vertical, childAlignment: TextAnchor.MiddleLeft);
 
-            Builder.CreateLabel(settingLabels, 300, 50, text: "IP Address").TextAlignment = TMPro.TextAlignmentOptions.MidlineLeft;
+            Builder.CreateLabel(settingLabels, 300, 50, text: "Address").TextAlignment = TMPro.TextAlignmentOptions.MidlineLeft;
             input_address = Builder.CreateTextInput(settingsValues, 620, 50, text: joinInfo.address.ToString(),
                 onChange: async input =>
                 {
@@ -99,7 +99,6 @@ namespace MultiplayerSFS.Mod
                     }
                 }
             );
-            // input_address.field.onEndEdit.AddListener((string input) => input_address.Text = IPAddress.Parse(input).ToString());
             defaultTextInputColor = input_address.FieldColor;
             
 

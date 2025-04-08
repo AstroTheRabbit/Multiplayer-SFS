@@ -34,6 +34,15 @@ namespace MultiplayerSFS.Mod.Patches
                 return !ClientManager.multiplayerEnabled.Value;
             }
         }
+
+        [HarmonyPatch(typeof(StatsRecorder), nameof(StatsRecorder.OnMerge))]
+        public class StatsRecorder_OnMerge
+        {
+            public static bool Prefix()
+            {
+                return !ClientManager.multiplayerEnabled.Value;
+            }
+        }
     }
 }
 

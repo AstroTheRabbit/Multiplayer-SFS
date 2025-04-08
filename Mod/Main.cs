@@ -22,13 +22,13 @@ namespace MultiplayerSFS.Mod
         public override string Description => "Adds server-client multiplayer to SFS!";
 
         public override Dictionary<string, string> Dependencies { get; } = new Dictionary<string, string> { { "UITools", "1.1.5" } };
-        // public Dictionary<string, FilePath> UpdatableFiles => new Dictionary<string, FilePath>()
-        // {
-        //     {
-        //         "https://github.com/AstroTheRabbit/Multiplayer-SFS/releases/latest/download/MultiplayerMod.dll",
-        //         new FolderPath(ModFolder).ExtendToFile("MultiplayerMod.dll")
-        //     }
-        // };
+        public Dictionary<string, FilePath> UpdatableFiles => new Dictionary<string, FilePath>()
+        {
+            {
+                "https://github.com/AstroTheRabbit/Multiplayer-SFS/releases/latest/download/MultiplayerMod.dll",
+                new FolderPath(ModFolder).ExtendToFile("MultiplayerMod.dll")
+            }
+        };
 
         public override void Early_Load()
         {

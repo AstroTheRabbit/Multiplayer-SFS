@@ -26,17 +26,6 @@ namespace MultiplayerSFS.Common
             dict.Add(id, item);
             return id;
         }
-
-        public static int InsertNew(this HashSet<int> set)
-        {
-            int id; do
-            {
-                id = generator.Next();
-            }
-            while (set.Contains(id));
-            set.Add(id);
-            return id;
-        }
     }
 
     public class WorldState
@@ -47,7 +36,7 @@ namespace MultiplayerSFS.Common
 
         public WorldState()
         {
-            worldTime = 0;
+            worldTime = 1000000.0;
             difficulty = Difficulty.DifficultyType.Normal;
             rockets = new Dictionary<int, RocketState>();
         }
@@ -126,8 +115,8 @@ namespace MultiplayerSFS.Common
                 partIndexToID.Add(i, id);
             }
 
-            joints = save.joints.Select((JointSave joint) => new JointState(joint, partIndexToID)).ToList();
-            stages = save.stages.Select((StageSave stage) => new StageState(stage, partIndexToID)).ToList();
+            joints = save.joints.Select(joint => new JointState(joint, partIndexToID)).ToList();
+            stages = save.stages.Select(stage => new StageState(stage, partIndexToID)).ToList();
         }
 
         public void UpdateRocket(Packet_UpdateRocket packet)
@@ -169,7 +158,7 @@ namespace MultiplayerSFS.Common
             msg.WriteCollection
             (
                 parts,
-                (KeyValuePair<int, PartState> kvp) =>
+                kvp =>
                 {
                     msg.Write(kvp.Key);
                     msg.Write(kvp.Value);
@@ -190,11 +179,11 @@ namespace MultiplayerSFS.Common
 
             parts = msg.ReadCollection
             (
-                (int count) => new Dictionary<int, PartState>(),
+                count => new Dictionary<int, PartState>(),
                 () => new KeyValuePair<int, PartState>(msg.ReadInt32(), msg.Read<PartState>())
             );
-            joints = msg.ReadCollection((int count) => new List<JointState>(count), () => msg.Read<JointState>());
-            stages = msg.ReadCollection((int count) => new List<StageState>(count), () => msg.Read<StageState>());
+            joints = msg.ReadCollection(count => new List<JointState>(count), () => msg.Read<JointState>());
+            stages = msg.ReadCollection(count => new List<StageState>(count), () => msg.Read<StageState>());
         }
     }
 
@@ -217,7 +206,7 @@ namespace MultiplayerSFS.Common
             msg.WriteCollection
             (
                 part.NUMBER_VARIABLES,
-                (KeyValuePair<string, double> kvp) =>
+                kvp =>
                 {
                     msg.Write(kvp.Key);
                     msg.Write(kvp.Value);
@@ -226,7 +215,7 @@ namespace MultiplayerSFS.Common
             msg.WriteCollection
             (
                 part.TOGGLE_VARIABLES,
-                (KeyValuePair<string, bool> kvp) =>
+                kvp =>
                 {
                     msg.Write(kvp.Key);
                     msg.Write(kvp.Value);
@@ -235,7 +224,7 @@ namespace MultiplayerSFS.Common
             msg.WriteCollection
             (
                 part.TEXT_VARIABLES,
-                (KeyValuePair<string, string> kvp) =>
+                kvp =>
                 {
                     msg.Write(kvp.Key);
                     msg.Write(kvp.Value);
@@ -253,17 +242,17 @@ namespace MultiplayerSFS.Common
                 temperature = msg.ReadFloat(),
                 NUMBER_VARIABLES = msg.ReadCollection
                 (
-                    (int count) => new Dictionary<string, double>(count),
+                    count => new Dictionary<string, double>(count),
                     () => new KeyValuePair<string, double>(msg.ReadString(), msg.ReadDouble())
                 ),
                 TOGGLE_VARIABLES = msg.ReadCollection
                 (
-                    (int count) => new Dictionary<string, bool>(count),
+                    count => new Dictionary<string, bool>(count),
                     () => new KeyValuePair<string, bool>(msg.ReadString(), msg.ReadBoolean())
                 ),
                 TEXT_VARIABLES = msg.ReadCollection
                 (
-                    (int count) => new Dictionary<string, string>(count),
+                    count => new Dictionary<string, string>(count),
                     () => new KeyValuePair<string, string>(msg.ReadString(), msg.ReadString())
                 ),
                 burns = msg.ReadBurnSave()
@@ -313,14 +302,10 @@ namespace MultiplayerSFS.Common
             this.partIDs = partIDs;
         }
 
-        public StageState(StageSave save, Dictionary<int, int> partIndexToID, HashSet<int> onlyInclude = null)
+        public StageState(StageSave save, Dictionary<int, int> partIndexToID)
         {
             stageID = save.stageId;
-            IEnumerable<int> unfiltered = save.partIndexes.Select((int idx) => partIndexToID[idx]);
-            if (onlyInclude != null)
-            {
-                unfiltered = unfiltered.Where((int id) => onlyInclude.Contains(id));
-            }
+            IEnumerable<int> unfiltered = save.partIndexes.Select(idx => partIndexToID[idx]);
             partIDs = unfiltered.ToList();
         }
 
@@ -332,7 +317,7 @@ namespace MultiplayerSFS.Common
         public void Deserialize(NetIncomingMessage msg)
         {
             stageID = msg.ReadInt32();
-            partIDs = msg.ReadCollection((int count) => new List<int>(), msg.ReadInt32);
+            partIDs = msg.ReadCollection(count => new List<int>(), msg.ReadInt32);
         }
     }
 }

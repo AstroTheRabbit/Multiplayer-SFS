@@ -1,6 +1,7 @@
 ﻿using System.Collections.Generic;
 using Lidgren.Network;
 using UnityEngine;
+using SFS.World;
 using SFS.WorldBase;
 using static SFS.World.WorldSave;
 
@@ -33,6 +34,10 @@ namespace MultiplayerSFS.Common
         /// Sent by the server to all players, allocating authority for the 'update cycle' of a set of rockets.
         /// </summary>
         UpdatePlayerAuthority,
+        /// <summary>
+        /// Sent by the server to keep the world time synchronised between players & the server, taking into account latency.
+        /// </summary>
+        UpdateWorldTime,
 
         // * Rocket Packets
         /// <summary>
@@ -98,6 +103,7 @@ namespace MultiplayerSFS.Common
         public int PlayerId { get; set; } = -1;
         public double UpdateRocketsPeriod { get; set; }
         public double WorldTime { get; set; }
+        public double SendTime { get; set; }
         public Difficulty.DifficultyType Difficulty { get; set; }
 
         public override PacketType Type => PacketType.JoinResponse;
@@ -106,6 +112,7 @@ namespace MultiplayerSFS.Common
             msg.Write(PlayerId);
             msg.Write(UpdateRocketsPeriod);
             msg.Write(WorldTime);
+            msg.Write(SendTime);
             msg.Write((byte) Difficulty);
         }
 
@@ -114,6 +121,7 @@ namespace MultiplayerSFS.Common
             PlayerId = msg.ReadInt32();
             UpdateRocketsPeriod = msg.ReadDouble();
             WorldTime = msg.ReadDouble();
+            SendTime = msg.ReadDouble();
             Difficulty = (Difficulty.DifficultyType) msg.ReadByte();
         }
     }
@@ -179,7 +187,22 @@ namespace MultiplayerSFS.Common
         }
         public override void Deserialize(NetIncomingMessage msg)
         {
-            RocketIds = msg.ReadCollection((int count) => new HashSet<int>(count), msg.ReadInt32);
+            RocketIds = msg.ReadCollection(count => new HashSet<int>(count), msg.ReadInt32);
+        }
+    }
+
+    public class Packet_UpdateWorldTime : Packet
+    {
+        public double WorldTime { get; set; }
+        
+        public override PacketType Type => PacketType.UpdateWorldTime;
+        public override void Serialize(NetOutgoingMessage msg)
+        {
+            msg.Write(WorldTime);
+        }
+        public override void Deserialize(NetIncomingMessage msg)
+        {
+            WorldTime = msg.ReadDouble();
         }
     }
 
@@ -207,15 +230,18 @@ namespace MultiplayerSFS.Common
     public class Packet_DestroyRocket : Packet
     {
         public int Id { get; set; } = -1;
+        public DestructionReason Reason { get; set; }
 
         public override PacketType Type => PacketType.DestroyRocket;
         public override void Serialize(NetOutgoingMessage msg)
         {
             msg.Write(Id);
+            msg.Write((byte) Reason);
         }
         public override void Deserialize(NetIncomingMessage msg)
         {
             Id = msg.ReadInt32();
+            Reason = (DestructionReason) msg.ReadByte();
         }
     }
     public class Packet_UpdateRocket : Packet
@@ -232,6 +258,7 @@ namespace MultiplayerSFS.Common
         public bool ThrottleOn { get; set; }
         public bool RCS { get; set; }
         public LocationData Location { get; set; }
+        public double WorldTime { get;  set; }
 
         public override PacketType Type => PacketType.UpdateRocket;
         public override void Serialize(NetOutgoingMessage msg)
@@ -247,6 +274,7 @@ namespace MultiplayerSFS.Common
             msg.Write(ThrottleOn);
             msg.Write(RCS);
             msg.Write(Location);
+            msg.Write(WorldTime);
         }
         public override void Deserialize(NetIncomingMessage msg)
         {
@@ -261,6 +289,7 @@ namespace MultiplayerSFS.Common
             ThrottleOn = msg.ReadBoolean();
             RCS = msg.ReadBoolean();
             Location = msg.ReadLocation();
+            WorldTime = msg.ReadDouble();
         }
     } 
 
@@ -270,6 +299,7 @@ namespace MultiplayerSFS.Common
         public int RocketId { get; set; } = -1;
         public int PartId { get; set; } = -1;
         public bool CreateExplosion { get; set; }
+        public DestructionReason Reason { get; set; }
 
         public override PacketType Type => PacketType.DestroyPart;
         public override void Serialize(NetOutgoingMessage msg)
@@ -277,12 +307,14 @@ namespace MultiplayerSFS.Common
             msg.Write(RocketId);
             msg.Write(PartId);
             msg.Write(CreateExplosion);
+            msg.Write((byte) Reason);
         }
         public override void Deserialize(NetIncomingMessage msg)
         {
             RocketId = msg.ReadInt32();
             PartId = msg.ReadInt32();
             CreateExplosion = msg.ReadBoolean();
+            Reason = (DestructionReason) msg.ReadByte();
         }
     }
     public class Packet_UpdateStaging : Packet
@@ -299,7 +331,7 @@ namespace MultiplayerSFS.Common
         public override void Deserialize(NetIncomingMessage msg)
         {
             RocketId = msg.ReadInt32();
-            Stages = msg.ReadCollection((int count) => new List<StageState>(count), () => msg.Read<StageState>());
+            Stages = msg.ReadCollection(count => new List<StageState>(count), () => msg.Read<StageState>());
         }
     }
     public class Packet_UpdatePart_EngineModule : Packet
@@ -346,7 +378,7 @@ namespace MultiplayerSFS.Common
         }
     }
 
-    // TODO
+    // ! TODO
     // UpdatePart_ToggleModule
     // UpdatePart_ResourceModules
 }

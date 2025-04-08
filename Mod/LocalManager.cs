@@ -8,25 +8,49 @@ using SFS.UI;
 using SFS.Parts;
 using SFS.World;
 using SFS.Variables;
-using SFS.Parts.Modules;
 using ModLoader.Helpers;
 using MultiplayerSFS.Common;
-using MultiplayerSFS.Mod.Patches;
 using Object = UnityEngine.Object;
+using MultiplayerSFS.Mod.Patches;
 
 namespace MultiplayerSFS.Mod
 {
     public class LocalManager
     {
+        /// <summary>
+        /// Players that are currently connected to the server, including the local player.
+        /// </summary>
         public static Dictionary<int, LocalPlayer> players;
+        /// <summary>
+        /// Rockets that are synced with the server and are visible to all other players.
+        /// </summary>
         public static Dictionary<int, LocalRocket> syncedRockets;
+        /// <summary>
+        /// Rockets that have been created locally, and are awaiting synchronisation with the server.
+        /// </summary>
         public static Dictionary<int, LocalRocket> unsyncedRockets;
         /// <summary>
-        /// The local id of the rocket that this player should be controlling after their launched rockets has been synced with the server.
+        /// The local ids of the rockets that this player should be controlling after their launched rockets has been synced with the server.
         /// </summary>
         public static HashSet<int> updateAuthority;
+        /// <summary>
+        /// Local id of the rocket that this player will switch to after it has been synced with the server.
+        /// </summary>
         public static int unsyncedToControl;
 
+        /// <summary>
+        /// A custom `DestructionReason` used to indicate that a part or rocket's destruction was requested by the multiplayer mod (usually as a result of a packet from the server).
+        /// </summary>
+        public const DestructionReason CustomDestructionReason = (DestructionReason) 4;
+        /// <summary>
+        /// The true reason for a part or rocket's destruction when `RocketManager.DestroyRocket` or `Part.DestroyPart` is called in multiplayer using `LocalManager.CustomDestructionReason`.
+        /// This is set before those methods are called so that their related patches in `WorldEventSyncing` can correctly pass the true reason on.
+        /// </summary>
+        public static DestructionReason TrueDestructionReason = DestructionReason.Intentional;
+
+        /// <summary>
+        /// The rate (in milliseconds) at which `UpdateRocket` packets will be sent to the server.
+        /// </summary>
         public static double updateRocketsPeriod = 20;
         public static Timer updateTimer;
 
@@ -48,7 +72,7 @@ namespace MultiplayerSFS.Mod
                     AutoReset = true,
                     Enabled = true,
                 };
-                updateTimer.Elapsed += (object source, ElapsedEventArgs e) => SendUpdatePackets();
+                updateTimer.Elapsed += (source, e) => SendUpdatePackets();
                 SceneHelper.OnHomeSceneLoaded += DisableUpdateTimer;
             }
         }
@@ -65,7 +89,7 @@ namespace MultiplayerSFS.Mod
             {
                 if (syncedRockets.TryGetValue(id, out LocalRocket localRocket) && localRocket.rocket is Rocket rocket)
                 {
-                    var packet = new Packet_UpdateRocket()
+                    Packet_UpdateRocket packet = new Packet_UpdateRocket()
                     {
                         Id = id,
                         Input_Turn = rocket.arrowkeys.turnAxis,
@@ -78,6 +102,7 @@ namespace MultiplayerSFS.Mod
                         ThrottleOn = rocket.throttle.throttleOn,
                         RCS = rocket.arrowkeys.rcs,
                         Location = new WorldSave.LocationData(rocket.location.Value),
+                        WorldTime = WorldTime.main.worldTime,
                     };
                     if (ClientManager.world.rockets.TryGetValue(id, out RocketState state))
                     {
@@ -97,13 +122,28 @@ namespace MultiplayerSFS.Mod
         }
 
         /// <summary>
-        /// Returns the id of the provided rocket, otherwise returns -1 if not found.
+        /// Returns the id of the provided synced rocket, otherwise returns -1 if not found.
         /// </summary>
-        public static int GetLocalRocketID(Rocket rocket)
+        public static int GetSyncedRocketID(Rocket rocket)
         {
             try
             {
-                return syncedRockets.First((KeyValuePair<int, LocalRocket> kvp) => kvp.Value.rocket == rocket).Key;
+                return syncedRockets.First(kvp => kvp.Value.rocket == rocket).Key;
+            }
+            catch (InvalidOperationException)
+            {
+                return -1;
+            }
+        }
+
+        /// <summary>
+        /// Returns the id of the provided unsynced rocket, otherwise returns -1 if not found.
+        /// </summary>
+        public static int GetUnsyncedRocketID(Rocket rocket)
+        {
+            try
+            {
+                return unsyncedRockets.First(kvp => kvp.Value.rocket == rocket).Key;
             }
             catch (InvalidOperationException)
             {
@@ -118,7 +158,7 @@ namespace MultiplayerSFS.Mod
         {
             try
             {
-                return syncedRockets[rocketId].parts.First((KeyValuePair<int, Part> kvp) => kvp.Value == part).Key;
+                return syncedRockets[rocketId].parts.First(kvp => kvp.Value == part).Key;
             }
             catch (InvalidOperationException)
             {
@@ -139,6 +179,11 @@ namespace MultiplayerSFS.Mod
             List<PartJoint> joints = new List<PartJoint>(state.joints.Count);
             foreach (JointState joint in state.joints)
             {
+                if (joint.id_A == -1 || joint.id_B == -1)
+                {
+                    // TODO! This is a temporary fix for an error caused by split modules (afaik).
+                    continue;
+                }
                 Part part_A = parts[joint.id_A];
                 Part part_B = parts[joint.id_B];
                 joints.Add(new PartJoint(part_A, part_B, part_B.Position - part_A.Position));
@@ -152,15 +197,15 @@ namespace MultiplayerSFS.Mod
 
             foreach (StageState stage in state.stages)
             {
-                List<Part> stageParts = stage.partIDs.Select((int id) => parts[id]).ToList();
+                List<Part> stageParts = stage.partIDs.Select(id => parts[id]).ToList();
                 rocket.staging.InsertStage(new Stage(stage.stageID, stageParts), false);
             }
             return new LocalRocket(rocket, parts);
         }
 
-        static Part SpawnLocalPart(PartState part, Transform holder = null)
+        static Part SpawnLocalPart(PartState part)
         {
-            return PartsLoader.CreatePart(part.part, holder, null, OnPartNotOwned.Allow, out _);
+            return PartsLoader.CreatePart(part.part, null, null, OnPartNotOwned.Allow, out _);
         }
 
         static Dictionary<int, Part> SpawnLocalParts(RocketState state)
@@ -174,11 +219,12 @@ namespace MultiplayerSFS.Mod
             return result;
         }
 
-        public static void DestroyLocalRocket(int id, DestructionReason reason = DestructionReason.Intentional)
+        public static void DestroyLocalRocket(int id)
         {
             if (syncedRockets.TryGetValue(id, out LocalRocket rocket) && rocket.rocket != null)
             {
-                RocketManager.DestroyRocket(rocket.rocket, reason);
+                TrueDestructionReason = DestructionReason.Intentional;
+                RocketManager.DestroyRocket(rocket.rocket, CustomDestructionReason);
             }
             syncedRockets.Remove(id);
         }
@@ -205,7 +251,6 @@ namespace MultiplayerSFS.Mod
                 if (packet.LocalId == unsyncedToControl)
                 {
                     unsyncedToControl = -1;
-                    PlayerController.main.player.Value = unsynced.rocket;
                     PlayerController.main.SmoothChangePlayer(unsynced.rocket);
                     GameCamerasManager.main.InstantlyRotateCamera();
                     // * This loading screen is opened in the `SceneLoader_LoadWorldScene` patch.
@@ -225,11 +270,6 @@ namespace MultiplayerSFS.Mod
             }
         }
 
-        public static void DestroyRocket(int id, DestructionReason reason = DestructionReason.Intentional)
-        {
-            DestroyLocalRocket(id, reason);
-        }
-
         public static void UpdateLocalRocket(Packet_UpdateRocket packet)
         {
             if (syncedRockets.TryGetValue(packet.Id, out LocalRocket rocket) && rocket.rocket != null)
@@ -245,7 +285,34 @@ namespace MultiplayerSFS.Mod
                 rocket.rocket.rb2d.angularVelocity = packet.AngularVelocity;
                 rocket.rocket.throttle.throttlePercent.Value = packet.ThrottlePercent;
                 rocket.rocket.throttle.throttleOn.Value = packet.ThrottleOn;
-                rocket.rocket.physics.SetLocationAndState(packet.Location.GetSaveLocation(WorldTime.main.worldTime), true);
+
+                // TODO! Interpolation to prevent jitter (especially when moving at high speeds like orbit).
+                Location loc = packet.Location.GetSaveLocation(packet.WorldTime);
+                double delta = WorldTime.main.worldTime - packet.WorldTime;
+                // Debug.Log(delta);
+
+                // if (loc.Height > 100 && delta > 0)
+                // {
+                //     const int interpolationSteps = 10;
+                //     double dt = delta / interpolationSteps;
+
+                //     Double2 pos = loc.position;
+                //     Double2 vel = loc.velocity;
+                //     Double2 acc = loc.planet.GetGravity(pos);
+
+                //     for (int i = 0; i < interpolationSteps; i++)
+                //     {
+                //         Double2 newPos = pos + (vel * dt) + (0.5 * acc * dt * dt);
+                //         Double2 newAcc = loc.planet.GetGravity(newPos);
+                //         Double2 newVel = vel + (acc + newAcc) * (0.5 * dt);
+
+                //         pos = newPos;
+                //         vel = newVel;
+                //         acc = newAcc;
+                //     }
+                //     loc = new Location(loc.planet, pos, vel);
+                // }
+                rocket.rocket.physics.SetLocationAndState(loc, rocket.rocket.physics.PhysicsMode);
             }
         }
 
@@ -255,8 +322,7 @@ namespace MultiplayerSFS.Mod
             {
                 if (rocket.parts.TryGetValue(packet.PartId, out Part localPart) && localPart != null)
                 {
-                    // ? This mod uses `(DestructionReason) 4` as a way to signal that the server has told the client to destroy this part.
-                    localPart.DestroyPart(packet.CreateExplosion, true, (DestructionReason) 4);
+                    localPart.DestroyPart(packet.CreateExplosion, true, CustomDestructionReason);
                 }
             }
         }
@@ -342,6 +408,9 @@ namespace MultiplayerSFS.Mod
     public class LocalPlayer
     {
         public string username;
+        /// <summary>
+        /// Id of the rocket currently controlled by this player, or -1 if they currently aren't controlling a rocket.
+        /// </summary>
         public Int_Local currentRocket;
 
         public LocalPlayer(string username)
@@ -351,7 +420,7 @@ namespace MultiplayerSFS.Mod
             currentRocket.OnChange += OnControlledRocketChange;
         }
 
-        public void OnControlledRocketChange()
+        public void OnControlledRocketChange(int oldId, int newId)
         {
             // TODO: Name tags above controlled rockets (on map as well?).
         }

@@ -1,13 +1,17 @@
+using System.Collections.Generic;
+using UnityEngine;
 using HarmonyLib;
-using MultiplayerSFS.Common;
+using SFS.World;
 using SFS.Parts;
 using SFS.Parts.Modules;
-using SFS.World;
+using MultiplayerSFS.Common;
 
 // ! TODO
 // UpdatePart_SplitModule,
 // WHEELS,
+// MOVE MODULES,
 // RESOURCES,
+// Burnmarks
 
 namespace MultiplayerSFS.Mod.Patches
 {
@@ -17,43 +21,91 @@ namespace MultiplayerSFS.Mod.Patches
     public class PartUpdateSyncing
     {
         /// <summary>
+        /// Prevents two rockets from docking if they are both controlled by players, or if one of the rockets isn't synced yet.
+        /// </summary>
+        [HarmonyPatch(typeof(DockingPortModule), "Dock")]
+        public static class DockingPortModule_Dock
+        {
+            public static bool Prefix(DockingPortModule __instance, DockingPortModule otherPort)
+            {
+                if (otherPort.Rocket.isPlayer)
+                {
+                    return false;
+                }
+                if (ClientManager.multiplayerEnabled)
+                {
+                    int id_a = LocalManager.GetSyncedRocketID(__instance.Rocket);
+                    int id_b = LocalManager.GetSyncedRocketID(otherPort.Rocket);
+
+                    if (id_a == -1 || id_b == -1)
+                    {
+                        // * One of the rockets are not synced with the server yet.
+                        return false;
+                    }
+
+                    bool controlled_a = false;
+                    bool controlled_b = false;
+
+                    foreach (KeyValuePair<int, LocalPlayer> kvp in LocalManager.players)
+                    {
+                        controlled_a |= kvp.Value.currentRocket == id_a;
+                        controlled_b |= kvp.Value.currentRocket == id_b;
+
+                        if (controlled_a && controlled_b)
+                        {
+                            // * Both of the rockets are controlled by players.
+                            return false;
+                        }
+                    }
+                }
+                return true;
+            }
+        }
+
+        /// <summary>
         /// Syncs the docking of rockets.
         /// </summary>
         [HarmonyPatch(typeof(RocketManager), nameof(RocketManager.MergeRockets))]
         public class RocketManager_MergeRockets
         {
-            public static void Prefix(Rocket rocket_A, Part part_A, Rocket rocket_B, Part part_B, out int __state)
+            public static void Prefix(Rocket rocket_A, Rocket rocket_B)
             {
-                // TODO!: This is broken - the create rocket packet seemingly isn't being sent.
-                if (rocket_A == rocket_B || !ClientManager.multiplayerEnabled)
+                if (!ClientManager.multiplayerEnabled || rocket_A == rocket_B)
                 {
-                    __state = -1;
                     return;
                 }
-                int id_a = LocalManager.GetLocalRocketID(rocket_A);
-                int id_b = LocalManager.GetLocalRocketID(rocket_B);
-                __state = id_a;
 
-                ClientManager.SendPacket
-                (
-                    new Packet_DestroyRocket()
-                    {
-                        Id = id_b,
-                    }
-                );
-            }
-            public static void Postfix(Rocket rocket_A, Part part_A, Rocket rocket_B, Part part_B, int __state)
-            {
-                int id_a = __state;
-                if (id_a == -1)
-                    return;
+                int id_a = LocalManager.GetSyncedRocketID(rocket_A);
+                int id_b = LocalManager.GetSyncedRocketID(rocket_B);
+                // * Both rockets are guaranteed to be synced by the `DockingPortModule_Dock` patch.
+                LocalRocket local_a = LocalManager.syncedRockets[id_a];
+                LocalRocket local_b = LocalManager.syncedRockets[id_b];
+
+
+                foreach (KeyValuePair<int, Part> kvp in local_a.parts)
+                {
+                    local_b.parts.InsertNew(kvp.Value);
+                }
+                // ? Rocket B's destruction is handled by the `RocketManager_DestroyRocket` patch.
+
+                if (rocket_B.isPlayer)
+                {
+                    ClientManager.SendPacket
+                    (
+                        new Packet_UpdatePlayerControl()
+                        {
+                            PlayerId = ClientManager.playerId,
+                            RocketId = id_a,
+                        }
+                    );
+                }
 
                 ClientManager.SendPacket
                 (
                     new Packet_CreateRocket()
                     {
                         GlobalId = id_a,
-                        Rocket = LocalManager.syncedRockets[id_a].ToState(),
+                        Rocket = local_a.ToState(),
                     }
                 );
             }
@@ -75,7 +127,7 @@ namespace MultiplayerSFS.Mod.Patches
                 void OnToggle(bool engineOn)
                 {    
                     Rocket rocket = __instance.GetComponentInParentTree<Rocket>();
-                    int rocketId = LocalManager.GetLocalRocketID(rocket);
+                    int rocketId = LocalManager.GetSyncedRocketID(rocket);
 
                     if (!LocalManager.updateAuthority.Contains(rocketId))
                         return;
@@ -112,7 +164,7 @@ namespace MultiplayerSFS.Mod.Patches
                 void UpdateState()
                 {    
                     Rocket rocket = __instance.GetComponentInParentTree<Rocket>();
-                    int rocketId = LocalManager.GetLocalRocketID(rocket);
+                    int rocketId = LocalManager.GetSyncedRocketID(rocket);
 
                     if (!LocalManager.updateAuthority.Contains(rocketId))
                         return;

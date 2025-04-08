@@ -2,6 +2,7 @@ using System;
 using System.Net;
 using System.Linq;
 using System.Timers;
+using System.Diagnostics;
 using System.Collections.Generic;
 using Lidgren.Network;
 using MultiplayerSFS.Common;
@@ -36,7 +37,7 @@ namespace MultiplayerSFS.Server
 			if (settings.completeResyncPeriod > 0)
 			{
 				resyncTimer = new Timer(1000 * settings.completeResyncPeriod);
-				resyncTimer.Elapsed += (object source, ElapsedEventArgs e) => OnCompleteResync();
+				resyncTimer.Elapsed += (source, e) => OnCompleteResync();
 				resyncTimer.Enabled = true;
 			}
 
@@ -49,10 +50,16 @@ namespace MultiplayerSFS.Server
 			try
 			{
 				Logger.Info($"Multiplayer SFS server started, listening for connections on port {server.Port}...", true);
-
+				Stopwatch worldTimer = Stopwatch.StartNew();
+				
 				while (true)
 				{
 					Listen();
+                    if (connectedPlayers.Values.Any(p => p.controlledRocket >= 0))
+					{
+						world.worldTime += worldTimer.Elapsed.TotalSeconds;
+					}
+					worldTimer.Restart();
 				}
 			}
 			catch (Exception e)
@@ -74,6 +81,9 @@ namespace MultiplayerSFS.Server
 					case NetIncomingMessageType.ConnectionApproval:
 						OnPlayerConnectionAttempt(msg);
 						break;
+					case NetIncomingMessageType.ConnectionLatencyUpdated:
+						OnLatencyUpdated(msg);
+						break;
 					case NetIncomingMessageType.Data:
 						OnIncomingPacket(msg);
 						break;
@@ -88,18 +98,8 @@ namespace MultiplayerSFS.Server
 					case NetIncomingMessageType.ErrorMessage:
 						Logger.Error($"Lidgren Error - \"{msg.ReadString()}\".");
 						break;
-					case NetIncomingMessageType.ConnectionLatencyUpdated:
-						if (FindPlayer(msg.SenderConnection) is ConnectedPlayer player)
-						{
-							string username = player.username.FormatUsername();
-							float avgTripTime = msg.SenderConnection.AverageRoundtripTime;
-							player.avgTripTime = avgTripTime;
-							Logger.Info($"Average roundtrip time updated for {username} @ {msg.SenderEndPoint} - {1000 * avgTripTime}ms.");
-						}
-
-						break;
 					default:
-						Logger.Warning($"Unhandled message type: {msg.MessageType}, {msg.DeliveryMethod}, {msg.LengthBytes} bytes.");
+						Logger.Warning($"Unhandled message type: {msg.MessageType} - {msg.DeliveryMethod} - {msg.LengthBytes} bytes.");
 						break;
 				}
 
@@ -174,7 +174,7 @@ namespace MultiplayerSFS.Server
 				reason = $"Username cannot be empty";
 				goto ConnectionDenied;
 			}
-			if (settings.blockDuplicatePlayerNames && connectedPlayers.Values.Select((ConnectedPlayer player) => player.username).Contains(request.Username))
+			if (settings.blockDuplicatePlayerNames && connectedPlayers.Values.Select(player => player.username).Contains(request.Username))
 			{
 				reason = $"Username '{request.Username}' is already in use";
 				goto ConnectionDenied;
@@ -273,6 +273,25 @@ namespace MultiplayerSFS.Server
 				connectedPlayers.Remove(connection.RemoteEndPoint);
 			}
         }
+		
+		static void OnLatencyUpdated(NetIncomingMessage msg)
+		{
+			if (FindPlayer(msg.SenderConnection) is ConnectedPlayer player)
+			{
+				string username = player.username.FormatUsername();
+				player.avgTripTime = msg.SenderConnection.AverageRoundtripTime;
+				Logger.Info($"Average roundtrip time updated for {username} @ {msg.SenderEndPoint} - {1000 * player.avgTripTime}ms.");
+
+				SendPacketToPlayer
+				(
+					msg.SenderConnection,
+					new Packet_UpdateWorldTime()
+					{
+						WorldTime = world.worldTime + (player.avgTripTime / 2),
+					}
+				);
+			}
+		}
 
 		static void OnCompleteResync()
 		{
@@ -290,7 +309,7 @@ namespace MultiplayerSFS.Server
 			}
 		}
 
-		static void UpdatePlayerAuthorities()
+		static void UpdatePlayerAuthorities(KeyValuePair<int, int>? mustAssign = null)
 		{
 			foreach (ConnectedPlayer player in connectedPlayers.Values)
 			{
@@ -298,7 +317,7 @@ namespace MultiplayerSFS.Server
 			}
 
 			// * No players are connected or controlling rockets.
-			if (connectedPlayers.All(kvp => kvp.Value.controlledRocket < 0))
+			if (connectedPlayers.All(kvp => kvp.Value.controlledRocket == -1))
             {
                 return;
             }
@@ -313,6 +332,13 @@ namespace MultiplayerSFS.Server
                     {
                         maxCount = player.updateAuthority.Count;
                     }
+
+					if (player.id == mustAssign?.Key && kvp.Key == mustAssign?.Value)
+					{
+						// * Always give update authority to the player/rocket pair of `mustAssign` (used for newly-launched rockets, etc).
+						bestPlayer = player;
+						break;
+					}
 
                     if (world.rockets.TryGetValue(player.controlledRocket, out RocketState controlledRocket))
 					{
@@ -420,6 +446,7 @@ namespace MultiplayerSFS.Server
 				if (player.id == packet.PlayerId)
 				{
 					player.controlledRocket = packet.RocketId;
+					Logger.Debug($"Player switch - {msg.SenderConnection.RemoteEndPoint.Address}");
 					SendPacketToAll
 					(
 						packet,
@@ -452,7 +479,7 @@ namespace MultiplayerSFS.Server
 				Logger.Debug($"new: {packet.Rocket.parts.Count}");
                 packet.GlobalId = world.rockets.InsertNew(packet.Rocket);
             	SendPacketToAll(packet);
-				UpdatePlayerAuthorities();
+				UpdatePlayerAuthorities(new KeyValuePair<int, int>(FindPlayer(msg.SenderConnection).id, packet.GlobalId));
             }
 
 		}
@@ -538,7 +565,7 @@ namespace MultiplayerSFS.Server
 
 		public ConnectedPlayer(string username)
 		{
-			HashSet<int> connectedPlayerIDs = Server.connectedPlayers.Select((KeyValuePair<IPEndPoint, ConnectedPlayer> kvp) => kvp.Value.id).ToHashSet();
+			HashSet<int> connectedPlayerIDs = Server.connectedPlayers.Select(kvp => kvp.Value.id).ToHashSet();
 			do
 			{
 				id = idGenerator.Next();

@@ -11,8 +11,9 @@ using SFS.Parts;
 using SFS.World;
 using SFS.Variables;
 using SFS.WorldBase;
-using MultiplayerSFS.Common;
 using SFS.Parts.Modules;
+using MultiplayerSFS.Common;
+using MultiplayerSFS.Mod.Patches;
 
 namespace MultiplayerSFS.Mod
 {
@@ -21,6 +22,9 @@ namespace MultiplayerSFS.Mod
         public static Bool_Local multiplayerEnabled = new Bool_Local() { Value = false };
         public static NetClient client;
         public static WorldState world;
+        /// <summary>
+        /// Id of the local player.
+        /// </summary>
         public static int playerId;
 
         public static async Task TryConnect(JoinInfo info)
@@ -30,11 +34,12 @@ namespace MultiplayerSFS.Mod
 
             NetPeerConfiguration npc = new NetPeerConfiguration("multiplayersfs")
             {
-                ConnectionTimeout = 10,
+                ConnectionTimeout = 5,
             };
             npc.EnableMessageType(NetIncomingMessageType.StatusChanged);
 			npc.EnableMessageType(NetIncomingMessageType.UnconnectedData);
 			npc.EnableMessageType(NetIncomingMessageType.VerboseDebugMessage);
+            // TODO: ping readout UI
 			// npc.EnableMessageType(NetIncomingMessageType.ConnectionLatencyUpdated);
             
             client = new NetClient(npc);
@@ -180,7 +185,8 @@ namespace MultiplayerSFS.Mod
         public static void HandlePacket(NetIncomingMessage msg)
         {
             PacketType packetType = (PacketType) msg.ReadByte();
-            Debug.Log($"Recieved packet of type {packetType}.");
+            if (packetType != PacketType.UpdateRocket)
+                Debug.Log($"Recieved packet of type {packetType}.");
             switch (packetType)
             {
                 // * Player/server Info Packets
@@ -195,6 +201,9 @@ namespace MultiplayerSFS.Mod
                     break;
                 case PacketType.UpdatePlayerAuthority:
                     OnPacket_UpdatePlayerAuthority(msg);
+                    break;
+                case PacketType.UpdateWorldTime:
+                    OnPacket_UpdateWorldTime(msg);
                     break;
 
                 // * Rocket Packets
@@ -237,7 +246,8 @@ namespace MultiplayerSFS.Mod
 
         public static void SendPacket(Packet packet, NetDeliveryMethod method = NetDeliveryMethod.ReliableOrdered)
         {
-            Debug.Log($"Sending packet of type {packet.Type}.");
+            if (packet.Type != PacketType.UpdateRocket)
+                Debug.Log($"Sending packet of type {packet.Type}.");
             NetOutgoingMessage msg = client.CreateMessage();
             msg.Write((byte) packet.Type);
             msg.Write(packet);
@@ -283,6 +293,15 @@ namespace MultiplayerSFS.Mod
             LocalManager.updateAuthority = packet.RocketIds;
         }
 
+        static void OnPacket_UpdateWorldTime(NetIncomingMessage msg)
+        {
+            Packet_UpdateWorldTime packet = msg.Read<Packet_UpdateWorldTime>();
+            if (WorldTime.main != null)
+            {
+                WorldTime.main.worldTime = packet.WorldTime;
+            }
+        }
+
         static void OnPacket_CreateRocket(NetIncomingMessage msg)
         {
             Packet_CreateRocket packet = msg.Read<Packet_CreateRocket>();
@@ -294,6 +313,7 @@ namespace MultiplayerSFS.Mod
         {
             Packet_DestroyRocket packet = msg.Read<Packet_DestroyRocket>();
             world.rockets.Remove(packet.Id);
+            LocalManager.TrueDestructionReason = packet.Reason;
             LocalManager.DestroyLocalRocket(packet.Id);
         }
 
@@ -317,6 +337,7 @@ namespace MultiplayerSFS.Mod
             if (world.rockets.TryGetValue(packet.RocketId, out RocketState state))
             {
                 state.RemovePart(packet.PartId);
+                LocalManager.TrueDestructionReason = packet.Reason;
                 LocalManager.DestroyLocalPart(packet);
             }
         }
