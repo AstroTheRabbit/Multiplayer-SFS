@@ -256,15 +256,11 @@ namespace MultiplayerSFS.Mod.Patches
         {
             public static IEnumerable<MethodBase> TargetMethods()
             {
-                string[] methods = new[]
-                {
-                    "AddStage",
-                    "UseStage",
-                    "OnReorder",
-                    "RemoveStage",
-                    "TogglePartSelected",
-                };
-                return methods.Select(n => AccessTools.Method(typeof(StagingDrawer), n)).Cast<MethodBase>();
+                yield return AccessTools.Method(typeof(StagingDrawer), "AddStage");
+                yield return AccessTools.Method(typeof(StagingDrawer), "UseStage");
+                yield return AccessTools.Method(typeof(StagingDrawer), "OnReorder");
+                yield return AccessTools.Method(typeof(StagingDrawer), "RemoveStage");
+                yield return AccessTools.Method(typeof(StagingDrawer), "TogglePartSelected");
             }
 
             public static void Postfix(StagingDrawer __instance)

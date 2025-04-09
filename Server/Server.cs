@@ -420,6 +420,9 @@ namespace MultiplayerSFS.Server
 				case PacketType.UpdatePart_WheelModule:
 					OnPacket_UpdatePart_WheelModule(msg);
 					break;
+				case PacketType.UpdatePart_BoosterModule:
+					OnPacket_UpdatePart_BoosterModule(msg);
+					break;
 				case PacketType.UpdatePart_ParachuteModule:
 					OnPacket_UpdatePart_ParachuteModule(msg);
 					break;
@@ -551,6 +554,23 @@ namespace MultiplayerSFS.Server
 				if (state.parts.TryGetValue(packet.PartId, out PartState part))
 				{
 					part.part.TOGGLE_VARIABLES["wheel_on"] = packet.WheelOn;
+					SendPacketToAll(packet, msg.SenderConnection);
+				}
+			}
+		}
+
+		static void OnPacket_UpdatePart_BoosterModule(NetIncomingMessage msg)
+		{
+			Packet_UpdatePart_BoosterModule packet = msg.Read<Packet_UpdatePart_BoosterModule>();
+			if (world.rockets.TryGetValue(packet.RocketId, out RocketState state))
+			{
+				if (state.parts.TryGetValue(packet.PartId, out PartState part))
+				{
+					// TODO: Booster modules seemingly don't save their on/off status? (At least not the RA retro pack)
+					// TODO: I'm guessing that's why they get infinite thrust after loading a save when they're activated?
+					// TODO: Anyway, I can't save either their "primed" state or their thrust output to the world state rn.
+					// TODO: The booster module is only obtainable in vanilla through the RA retro pack, so it shouldn't matter too much for now.
+					part.part.NUMBER_VARIABLES["fuel_percent"] = packet.FuelPercent;
 					SendPacketToAll(packet, msg.SenderConnection);
 				}
 			}

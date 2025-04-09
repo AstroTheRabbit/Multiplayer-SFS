@@ -73,6 +73,10 @@ namespace MultiplayerSFS.Common
         /// </summary>
         UpdatePart_WheelModule,
         /// <summary>
+        /// Synchronises the toggling of booster modules.
+        /// </summary>
+        UpdatePart_BoosterModule,
+        /// <summary>
         /// Synchronises the activation of parachutes.
         /// </summary>
         UpdatePart_ParachuteModule,
@@ -387,6 +391,32 @@ namespace MultiplayerSFS.Common
             WheelOn = msg.ReadBoolean();
         }
     }
+    public class Packet_UpdatePart_BoosterModule : Packet
+    {
+        public int RocketId { get; set; } = -1;
+        public int PartId { get; set; } = -1;
+        public bool Primed { get; set; }
+        public float Throttle { get; set; }
+        public float FuelPercent { get; set; }
+
+        public override PacketType Type => PacketType.UpdatePart_BoosterModule;
+        public override void Serialize(NetOutgoingMessage msg)
+        {
+            msg.Write(RocketId);
+            msg.Write(PartId);
+            msg.Write(Primed);
+            msg.Write(Throttle);
+            msg.Write(FuelPercent);
+        }
+        public override void Deserialize(NetIncomingMessage msg)
+        {
+            RocketId = msg.ReadInt32();
+            PartId = msg.ReadInt32();
+            Primed = msg.ReadBoolean();
+            Throttle = msg.ReadFloat();
+            FuelPercent = msg.ReadFloat();
+        }
+    }
     public class Packet_UpdatePart_ParachuteModule : Packet
     {
         public int RocketId { get; set; } = -1;
@@ -410,7 +440,6 @@ namespace MultiplayerSFS.Common
             TargetState = msg.ReadFloat();
         }
     }
-
     public class Packet_UpdatePart_MoveModule : Packet
     {
         public int RocketId { get; set; } = -1;

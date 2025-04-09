@@ -1,3 +1,4 @@
+using System.Reflection;
 using System.Collections.Generic;
 using UnityEngine;
 using HarmonyLib;
@@ -152,6 +153,63 @@ namespace MultiplayerSFS.Mod.Patches
         }
 
         /// <summary>
+        /// Syncs the variables of a `BoosterModule`.
+        /// </summary>
+        [HarmonyPatch]
+        public class BoosterModuleUpdates
+        {
+            public static IEnumerable<MethodBase> TargetMethods()
+            {
+                yield return AccessTools.Method(typeof(BoosterModule), "FixedUpdate");
+                yield return AccessTools.Method(typeof(BoosterModule), nameof(BoosterModule.Fire));
+                yield return AccessTools.Method(typeof(BoosterModule), nameof(BoosterModule.Fire_Instantly));
+            }
+
+            public static void Prefix(BoosterModule __instance, out (bool primed, float throttle) __state)
+            {
+                __state.primed = __instance.boosterPrimed.Value;
+                __state.throttle = __instance.throttle_Out.Value;
+            }
+
+            public static void Postfix(BoosterModule __instance, (bool primed, float throttle) __state, MethodBase __originalMethod)
+            {
+                bool primed = __instance.boosterPrimed.Value;
+                float throttle = __instance.throttle_Out.Value;
+                Debug.Log("A");
+                if (ClientManager.multiplayerEnabled && GameManager.main != null && (primed != __state.primed || throttle != __state.throttle))
+                {
+                Debug.Log(__originalMethod.FullDescription());
+                Debug.Log($"{__state.primed} -> {primed}");
+                Debug.Log($"{__state.throttle} -> {throttle}");
+                Debug.Log("B");
+                    Rocket rocket = __instance.GetComponentInParentTree<Rocket>();
+                    int rocketId = LocalManager.GetSyncedRocketID(rocket);
+
+                Debug.Log("C");
+                    if (!LocalManager.updateAuthority.Contains(rocketId))
+                        return;
+
+                Debug.Log("D");
+                    Part part = __instance.GetComponentInParent<Part>();
+                    int partId = LocalManager.GetLocalPartID(rocketId, part);
+
+                Debug.Log("E");
+                    ClientManager.SendPacket
+                    (
+                        new Packet_UpdatePart_BoosterModule()
+                        {
+                            RocketId = rocketId,
+                            PartId = partId,
+                            Primed = primed,
+                            Throttle = throttle,
+                            FuelPercent = __instance.fuelPercent.Value,
+                        }
+                    );
+                }
+            }
+        }
+
+        /// <summary>
         /// Syncs the toggling of a `WheelModule`.
         /// </summary>
         [HarmonyPatch(typeof(WheelModule), nameof(WheelModule.ToggleEnabled))]
@@ -159,24 +217,27 @@ namespace MultiplayerSFS.Mod.Patches
         {
             public static void Postfix(WheelModule __instance)
             {
-                Rocket rocket = __instance.GetComponentInParentTree<Rocket>();
-                int rocketId = LocalManager.GetSyncedRocketID(rocket);
+                if (GameManager.main != null && ClientManager.multiplayerEnabled)
+                {
+                    Rocket rocket = __instance.GetComponentInParentTree<Rocket>();
+                    int rocketId = LocalManager.GetSyncedRocketID(rocket);
 
-                if (!LocalManager.updateAuthority.Contains(rocketId))
-                    return;
+                    if (!LocalManager.updateAuthority.Contains(rocketId))
+                        return;
 
-                Part part = __instance.GetComponentInParent<Part>();
-                int partId = LocalManager.GetLocalPartID(rocketId, part);
+                    Part part = __instance.GetComponentInParent<Part>();
+                    int partId = LocalManager.GetLocalPartID(rocketId, part);
 
-                ClientManager.SendPacket
-                (
-                    new Packet_UpdatePart_WheelModule()
-                    {
-                        RocketId = rocketId,
-                        PartId = partId,
-                        WheelOn = __instance.on.Value,
-                    }
-                );
+                    ClientManager.SendPacket
+                    (
+                        new Packet_UpdatePart_WheelModule()
+                        {
+                            RocketId = rocketId,
+                            PartId = partId,
+                            WheelOn = __instance.on.Value,
+                        }
+                    );
+                }
             }
         }
 
@@ -226,25 +287,28 @@ namespace MultiplayerSFS.Mod.Patches
         {
             public static void Postfix(MoveModule __instance)
             {
-                Rocket rocket = __instance.GetComponentInParentTree<Rocket>();
-                int rocketId = LocalManager.GetSyncedRocketID(rocket);
+                if (GameManager.main != null && ClientManager.multiplayerEnabled)
+                {
+                    Rocket rocket = __instance.GetComponentInParentTree<Rocket>();
+                    int rocketId = LocalManager.GetSyncedRocketID(rocket);
 
-                if (!LocalManager.updateAuthority.Contains(rocketId))
-                    return;
+                    if (!LocalManager.updateAuthority.Contains(rocketId))
+                        return;
 
-                Part part = __instance.GetComponentInParent<Part>();
-                int partId = LocalManager.GetLocalPartID(rocketId, part);
+                    Part part = __instance.GetComponentInParent<Part>();
+                    int partId = LocalManager.GetLocalPartID(rocketId, part);
 
-                ClientManager.SendPacket
-                (
-                    new Packet_UpdatePart_MoveModule()
-                    {
-                        RocketId = rocketId,
-                        PartId = partId,
-                        Time = __instance.time.Value,
-                        TargetTime = __instance.targetTime.Value,
-                    }
-                );
+                    ClientManager.SendPacket
+                    (
+                        new Packet_UpdatePart_MoveModule()
+                        {
+                            RocketId = rocketId,
+                            PartId = partId,
+                            Time = __instance.time.Value,
+                            TargetTime = __instance.targetTime.Value,
+                        }
+                    );
+                }
             }
         }
     }

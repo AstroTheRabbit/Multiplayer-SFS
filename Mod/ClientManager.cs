@@ -230,6 +230,9 @@ namespace MultiplayerSFS.Mod
                 case PacketType.UpdatePart_WheelModule:
                     OnPacket_UpdatePart_WheelModule(msg);
                     break;
+                case PacketType.UpdatePart_BoosterModule:
+                    OnPacket_UpdatePart_BoosterModule(msg);
+                    break;
                 case PacketType.UpdatePart_ParachuteModule:
                     OnPacket_UpdatePart_ParachuteModule(msg);
                     break;
@@ -407,6 +410,37 @@ namespace MultiplayerSFS.Mod
                             Debug.LogWarning($"OnPacket_UpdatePart_WheelModule: Found multiple wheel modules on part \"{part.Name}\".");
                         }
                         modules[0].on.Value = packet.WheelOn;
+                    }
+                }
+            }
+            else
+            {
+                Debug.LogError($"Missing rocket from world state!");
+            }
+        }
+
+        static void OnPacket_UpdatePart_BoosterModule(NetIncomingMessage msg)
+        {
+            Packet_UpdatePart_BoosterModule packet = msg.Read<Packet_UpdatePart_BoosterModule>();
+            if (world.rockets.TryGetValue(packet.RocketId, out RocketState rocketState))
+            {
+                if (rocketState.parts.TryGetValue(packet.PartId, out PartState partState))
+				{
+					partState.part.NUMBER_VARIABLES["fuel_percent"] = packet.FuelPercent;
+				}
+                
+                if (LocalManager.syncedRockets.TryGetValue(packet.RocketId, out LocalRocket rocket))
+                {
+                    if (rocket.parts.TryGetValue(packet.PartId, out Part part))
+                    {
+                        BoosterModule[] modules = part.GetModules<BoosterModule>();
+                        if (modules.Length > 1)
+                        {
+                            Debug.LogWarning($"OnPacket_UpdatePart_BoosterModule: Found multiple booster modules on part \"{part.Name}\".");
+                        }
+                        modules[0].boosterPrimed.Value = packet.Primed;
+                        modules[0].throttle_Out.Value = packet.Throttle;
+                        modules[0].fuelPercent.Value = packet.FuelPercent;
                     }
                 }
             }

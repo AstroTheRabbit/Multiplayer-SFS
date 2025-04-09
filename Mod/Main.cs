@@ -43,7 +43,7 @@ namespace MultiplayerSFS.Mod
                 if (ClientManager.multiplayerEnabled)
                 {
                     // SandboxSettings.main.settings.noGravity = true;
-                    SandboxSettings.main.settings.infiniteFuel = true;
+                    // SandboxSettings.main.settings.infiniteFuel = true;
                     SandboxSettings.main.settings.noHeatDamage = true;
                 }
             };
