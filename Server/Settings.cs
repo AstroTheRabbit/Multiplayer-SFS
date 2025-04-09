@@ -26,13 +26,6 @@ namespace MultiplayerSFS.Server
 		public bool blockDuplicatePlayerNames = false; // ! TEST VALUE
 
 		/// <summary>
-		/// A time (in seconds) after which the server will send a full `CreateRocket` packets to resync all rockets.
-		/// A shorter resync period may ensure that rockets are properly synchronised between connected players,
-		/// but may also result in FPS drops (since the rockets have to be completely recreated client-side).
-		/// </summary>
-		public double completeResyncPeriod = 0; // ! TEST VALUE
-
-		/// <summary>
 		/// A time (in milliseconds) after which connected clients will send `UpdateRocket` packets to the server.
 		/// It's generally recommended to keep this value low (a value that is too high will make rockets 'jitter'),
 		/// but too low can lower players' FPS.

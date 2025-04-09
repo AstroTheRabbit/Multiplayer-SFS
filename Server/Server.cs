@@ -16,8 +16,6 @@ namespace MultiplayerSFS.Server
 		public static WorldState world;
 		public static Dictionary<IPEndPoint, ConnectedPlayer> connectedPlayers;
 
-		public static Timer resyncTimer;
-
 		public static void Initialize(ServerSettings settings)
 		{
 			Server.settings = settings;
@@ -33,13 +31,6 @@ namespace MultiplayerSFS.Server
 
 			world = new WorldState(settings.worldSavePath);
 			connectedPlayers = new Dictionary<IPEndPoint, ConnectedPlayer>();
-
-			if (settings.completeResyncPeriod > 0)
-			{
-				resyncTimer = new Timer(1000 * settings.completeResyncPeriod);
-				resyncTimer.Elapsed += (source, e) => OnCompleteResync();
-				resyncTimer.Enabled = true;
-			}
 
             server = new NetServer(npc);
 			server.Start();

@@ -186,12 +186,6 @@ namespace MultiplayerSFS.Mod.Patches
             {
                 if (ClientManager.multiplayerEnabled)
                 {
-                    if (childRockets.Count == 0)
-                    {
-                        // * `RecreateRockets` resulted in no change to the rocket, and so it does not need to be re-synced.
-                        return;
-                    }
-
                     int rocketId = LocalManager.GetSyncedRocketID(rocket);
                     if (rocketId == -1)
                     {
@@ -210,11 +204,25 @@ namespace MultiplayerSFS.Mod.Patches
                         return;
                     }
 
+                    // * Remove parts that have been seperated from the parent rocket (also prevents a bug where split modules "delete" their original part).
                     LocalRocket localRocket = LocalManager.syncedRockets[rocketId];
-                    // * Remove parts that have been seperated from the parent rocket.
-                    localRocket.parts = localRocket.parts
-                        .Where(kvp => rocket.partHolder.partsSet.Contains(kvp.Value))
-                        .ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
+                    localRocket.parts.Clear();
+                    foreach (Part part in rocket.partHolder.partsSet)
+                    {
+                        localRocket.parts.InsertNew(part);
+                    }
+
+                    // * Sync the parent rocket with the server.
+                    RocketState localState = localRocket.ToState();
+                    ClientManager.world.rockets[rocketId] = localState;
+                    ClientManager.SendPacket
+                    (
+                        new Packet_CreateRocket()
+                        {
+                            GlobalId = rocketId,
+                            Rocket = localState,
+                        }
+                    );
 
                     foreach (Rocket child in childRockets)
                     {
@@ -232,18 +240,6 @@ namespace MultiplayerSFS.Mod.Patches
                             }
                         );
                     }
-
-                    // * Sync the parent rocket with the server.
-                    RocketState localState = localRocket.ToState();
-                    ClientManager.world.rockets[rocketId] = localState;
-                    ClientManager.SendPacket
-                    (
-                        new Packet_CreateRocket()
-                        {
-                            GlobalId = rocketId,
-                            Rocket = localState,
-                        }
-                    );
                 }
             }
         }
