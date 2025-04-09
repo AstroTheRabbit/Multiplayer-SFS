@@ -417,6 +417,9 @@ namespace MultiplayerSFS.Server
 				case PacketType.UpdatePart_EngineModule:
 					OnPacket_UpdatePart_EngineModule(msg);
 					break;
+				case PacketType.UpdatePart_WheelModule:
+					OnPacket_UpdatePart_WheelModule(msg);
+					break;
 				case PacketType.UpdatePart_ParachuteModule:
 					OnPacket_UpdatePart_ParachuteModule(msg);
 					break;
@@ -535,6 +538,19 @@ namespace MultiplayerSFS.Server
 				if (state.parts.TryGetValue(packet.PartId, out PartState part))
 				{
 					part.part.TOGGLE_VARIABLES["engine_on"] = packet.EngineOn;
+					SendPacketToAll(packet, msg.SenderConnection);
+				}
+			}
+		}
+
+		static void OnPacket_UpdatePart_WheelModule(NetIncomingMessage msg)
+		{
+			Packet_UpdatePart_WheelModule packet = msg.Read<Packet_UpdatePart_WheelModule>();
+			if (world.rockets.TryGetValue(packet.RocketId, out RocketState state))
+			{
+				if (state.parts.TryGetValue(packet.PartId, out PartState part))
+				{
+					part.part.TOGGLE_VARIABLES["wheel_on"] = packet.WheelOn;
 					SendPacketToAll(packet, msg.SenderConnection);
 				}
 			}

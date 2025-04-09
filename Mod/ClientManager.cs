@@ -227,6 +227,9 @@ namespace MultiplayerSFS.Mod
                 case PacketType.UpdatePart_EngineModule:
                     OnPacket_UpdatePart_EngineModule(msg);
                     break;
+                case PacketType.UpdatePart_WheelModule:
+                    OnPacket_UpdatePart_WheelModule(msg);
+                    break;
                 case PacketType.UpdatePart_ParachuteModule:
                     OnPacket_UpdatePart_ParachuteModule(msg);
                     break;
@@ -369,7 +372,41 @@ namespace MultiplayerSFS.Mod
                 {
                     if (rocket.parts.TryGetValue(packet.PartId, out Part part))
                     {
-                        part.GetModules<EngineModule>()[0].engineOn.Value = packet.EngineOn;
+                        EngineModule[] modules = part.GetModules<EngineModule>();
+                        if (modules.Length > 1)
+                        {
+                            Debug.LogWarning($"OnPacket_UpdatePart_EngineModule: Found multiple engine modules on part \"{part.Name}\".");
+                        }
+                        modules[0].engineOn.Value = packet.EngineOn;
+                    }
+                }
+            }
+            else
+            {
+                Debug.LogError($"Missing rocket from world state!");
+            }
+        }
+
+        static void OnPacket_UpdatePart_WheelModule(NetIncomingMessage msg)
+        {
+            Packet_UpdatePart_WheelModule packet = msg.Read<Packet_UpdatePart_WheelModule>();
+            if (world.rockets.TryGetValue(packet.RocketId, out RocketState rocketState))
+            {
+                if (rocketState.parts.TryGetValue(packet.PartId, out PartState partState))
+				{
+					partState.part.TOGGLE_VARIABLES["wheel_on"] = packet.WheelOn;
+				}
+                
+                if (LocalManager.syncedRockets.TryGetValue(packet.RocketId, out LocalRocket rocket))
+                {
+                    if (rocket.parts.TryGetValue(packet.PartId, out Part part))
+                    {
+                        WheelModule[] modules = part.GetModules<WheelModule>();
+                        if (modules.Length > 1)
+                        {
+                            Debug.LogWarning($"OnPacket_UpdatePart_WheelModule: Found multiple wheel modules on part \"{part.Name}\".");
+                        }
+                        modules[0].on.Value = packet.WheelOn;
                     }
                 }
             }
@@ -394,9 +431,13 @@ namespace MultiplayerSFS.Mod
                 {
                     if (rocket.parts.TryGetValue(packet.PartId, out Part part))
                     {
-                        ParachuteModule parachute = part.GetModules<ParachuteModule>()[0];
-                        parachute.state.Value = packet.State;
-                        parachute.targetState.Value = packet.TargetState;
+                        ParachuteModule[] modules = part.GetModules<ParachuteModule>();
+                        if (modules.Length > 1)
+                        {
+                            Debug.LogWarning($"OnPacket_UpdatePart_ParachuteModule: Found multiple parachute modules on part \"{part.Name}\".");
+                        }
+                        modules[0].state.Value = packet.State;
+                        modules[0].targetState.Value = packet.TargetState;
                     }
                 }
             }

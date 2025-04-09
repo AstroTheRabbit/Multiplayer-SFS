@@ -152,6 +152,35 @@ namespace MultiplayerSFS.Mod.Patches
         }
 
         /// <summary>
+        /// Syncs the toggling of a `WheelModule`.
+        /// </summary>
+        [HarmonyPatch(typeof(WheelModule), nameof(WheelModule.ToggleEnabled))]
+        public static class WheelModule_ToggleEnabled
+        {
+            public static void Postfix(WheelModule __instance)
+            {
+                Rocket rocket = __instance.GetComponentInParentTree<Rocket>();
+                int rocketId = LocalManager.GetSyncedRocketID(rocket);
+
+                if (!LocalManager.updateAuthority.Contains(rocketId))
+                    return;
+
+                Part part = __instance.GetComponentInParent<Part>();
+                int partId = LocalManager.GetLocalPartID(rocketId, part);
+
+                ClientManager.SendPacket
+                (
+                    new Packet_UpdatePart_WheelModule()
+                    {
+                        RocketId = rocketId,
+                        PartId = partId,
+                        WheelOn = __instance.on.Value,
+                    }
+                );
+            }
+        }
+
+        /// <summary>
         /// Syncs the target state of a `ParachuteModule`.
         /// </summary>
         [HarmonyPatch(typeof(ParachuteModule), "Start")]
