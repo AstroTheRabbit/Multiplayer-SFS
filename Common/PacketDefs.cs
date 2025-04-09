@@ -62,15 +62,24 @@ namespace MultiplayerSFS.Common
         /// Sent whenever the staging of a rocket has been changed.
         /// </summary>
         UpdateStaging,
-        // ? The effects of parts like docking ports and seperators are handled seperately with `CreateRocket` and `DestroyRocket` packets.
+        // ? The effects of parts like docking ports and seperators are handled seperately in patches with `CreateRocket` and `DestroyRocket` packets.
         // TODO: However, a seperate packet may be needed for stuff like the particle effects of seperators (but that's a minor issue).
-        UpdatePart_EngineModule,
-        UpdatePart_ParachuteModule,
-        UpdatePart_ToggleModule,
         /// <summary>
-        /// Unlike the other module update packets, `UpdateResourceModules` sends the updates in bulk to prevent the connection from being flooded.
+        /// Synchronises the toggling of rocket engines.
         /// </summary>
-        UpdatePart_ResourceModules,
+        UpdatePart_EngineModule,
+        /// <summary>
+        /// Synchronises the activation of parachutes.
+        /// </summary>
+        UpdatePart_ParachuteModule,
+        /// <summary>
+        /// Synchronises the state of move modules when used through `MoveModule.Toggle`.
+        /// </summary>
+        UpdatePart_MoveModule,
+        /// <summary>
+        /// Synchronises the state of resource modules e.g. fuel tanks.
+        /// </summary>
+        UpdatePart_ResourceModule,
     }
 
     public abstract class Packet : INetData
@@ -358,8 +367,8 @@ namespace MultiplayerSFS.Common
     {
         public int RocketId { get; set; } = -1;
         public int PartId { get; set; } = -1;
-        public double State { get; set; }
-        public double TargetState { get; set; }
+        public float State { get; set; }
+        public float TargetState { get; set; }
 
         public override PacketType Type => PacketType.UpdatePart_ParachuteModule;
         public override void Serialize(NetOutgoingMessage msg)
@@ -373,12 +382,35 @@ namespace MultiplayerSFS.Common
         {
             RocketId = msg.ReadInt32();
             PartId = msg.ReadInt32();
-            State = msg.ReadDouble();
-            TargetState = msg.ReadDouble();
+            State = msg.ReadFloat();
+            TargetState = msg.ReadFloat();
+        }
+    }
+
+    public class Packet_UpdatePart_MoveModule : Packet
+    {
+        public int RocketId { get; set; } = -1;
+        public int PartId { get; set; } = -1;
+        public float Time { get; set; }
+        public float TargetTime { get; set; }
+
+        public override PacketType Type => PacketType.UpdatePart_MoveModule;
+        public override void Serialize(NetOutgoingMessage msg)
+        {
+            msg.Write(RocketId);
+            msg.Write(PartId);
+            msg.Write(Time);
+            msg.Write(TargetTime);
+        }
+        public override void Deserialize(NetIncomingMessage msg)
+        {
+            RocketId = msg.ReadInt32();
+            PartId = msg.ReadInt32();
+            Time = msg.ReadFloat();
+            TargetTime = msg.ReadFloat();
         }
     }
 
     // ! TODO
-    // UpdatePart_ToggleModule
-    // UpdatePart_ResourceModules
+    // UpdatePart_ResourceModule
 }

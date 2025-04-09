@@ -420,6 +420,9 @@ namespace MultiplayerSFS.Server
 				case PacketType.UpdatePart_ParachuteModule:
 					OnPacket_UpdatePart_ParachuteModule(msg);
 					break;
+				case PacketType.UpdatePart_MoveModule:
+                    OnPacket_UpdatePart_MoveModule(msg);
+                    break;
 				
 				case PacketType.JoinRequest:
 					Logger.Warning("Recieved join request outside of connection attempt.");
@@ -504,6 +507,26 @@ namespace MultiplayerSFS.Server
 			}
 		}
 
+		static void OnPacket_DestroyPart(NetIncomingMessage msg)
+		{
+			Packet_DestroyPart packet = msg.Read<Packet_DestroyPart>();
+			if (world.rockets.TryGetValue(packet.RocketId, out RocketState state))
+			{
+				if (state.RemovePart(packet.PartId))
+					SendPacketToAll(packet, msg.SenderConnection);
+			}
+		}
+
+		static void OnPacket_UpdateStaging(NetIncomingMessage msg)
+		{
+			Packet_UpdateStaging packet = msg.Read<Packet_UpdateStaging>();
+			if (world.rockets.TryGetValue(packet.RocketId, out RocketState state))
+			{
+				state.stages = packet.Stages;
+				SendPacketToAll(packet, msg.SenderConnection);
+			}
+		}
+
 		static void OnPacket_UpdatePart_EngineModule(NetIncomingMessage msg)
 		{
 			Packet_UpdatePart_EngineModule packet = msg.Read<Packet_UpdatePart_EngineModule>();
@@ -531,23 +554,17 @@ namespace MultiplayerSFS.Server
 			}
 		}
 
-		static void OnPacket_DestroyPart(NetIncomingMessage msg)
+		static void OnPacket_UpdatePart_MoveModule(NetIncomingMessage msg)
 		{
-			Packet_DestroyPart packet = msg.Read<Packet_DestroyPart>();
+			Packet_UpdatePart_MoveModule packet = msg.Read<Packet_UpdatePart_MoveModule>();
 			if (world.rockets.TryGetValue(packet.RocketId, out RocketState state))
 			{
-				if (state.RemovePart(packet.PartId))
+				if (state.parts.TryGetValue(packet.PartId, out PartState part))
+				{
+					part.part.NUMBER_VARIABLES["state"] = packet.Time;
+					part.part.NUMBER_VARIABLES["state_target"] = packet.TargetTime;
 					SendPacketToAll(packet, msg.SenderConnection);
-			}
-		}
-
-		static void OnPacket_UpdateStaging(NetIncomingMessage msg)
-		{
-			Packet_UpdateStaging packet = msg.Read<Packet_UpdateStaging>();
-			if (world.rockets.TryGetValue(packet.RocketId, out RocketState state))
-			{
-				state.stages = packet.Stages;
-				SendPacketToAll(packet, msg.SenderConnection);
+				}
 			}
 		}
 	}

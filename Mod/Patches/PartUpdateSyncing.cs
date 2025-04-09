@@ -124,8 +124,11 @@ namespace MultiplayerSFS.Mod.Patches
                     __instance.engineOn.OnChange += OnToggle;
                 }
 
-                void OnToggle(bool engineOn)
+                void OnToggle(bool engineOn_old, bool engineOn_new)
                 {    
+                    if (engineOn_old == engineOn_new)
+                        return;
+
                     Rocket rocket = __instance.GetComponentInParentTree<Rocket>();
                     int rocketId = LocalManager.GetSyncedRocketID(rocket);
 
@@ -141,7 +144,7 @@ namespace MultiplayerSFS.Mod.Patches
                         {
                             RocketId = rocketId,
                             PartId = partId,
-                            EngineOn = engineOn,
+                            EngineOn = engineOn_new,
                         }
                     );
                 }
@@ -183,6 +186,36 @@ namespace MultiplayerSFS.Mod.Patches
                         }
                     );
                 }
+            }
+        }
+
+        /// <summary>
+        /// Synchronises the use of `MoveModule.Toggle` e.g. landing legs and solar panels.
+        /// </summary>
+        [HarmonyPatch(typeof(MoveModule), nameof(MoveModule.Toggle))]
+        public static class MoveModule_Toggle
+        {
+            public static void Postfix(MoveModule __instance)
+            {
+                Rocket rocket = __instance.GetComponentInParentTree<Rocket>();
+                int rocketId = LocalManager.GetSyncedRocketID(rocket);
+
+                if (!LocalManager.updateAuthority.Contains(rocketId))
+                    return;
+
+                Part part = __instance.GetComponentInParent<Part>();
+                int partId = LocalManager.GetLocalPartID(rocketId, part);
+
+                ClientManager.SendPacket
+                (
+                    new Packet_UpdatePart_MoveModule()
+                    {
+                        RocketId = rocketId,
+                        PartId = partId,
+                        Time = __instance.time.Value,
+                        TargetTime = __instance.targetTime.Value,
+                    }
+                );
             }
         }
     }

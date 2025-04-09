@@ -218,17 +218,20 @@ namespace MultiplayerSFS.Mod
                     break;
 
                 // * Part & Staging Packets
+                case PacketType.DestroyPart:
+                    OnPacket_DestroyPart(msg);
+                    break;
+                case PacketType.UpdateStaging:
+                    OnPacket_UpdateStaging(msg);
+                    break;
                 case PacketType.UpdatePart_EngineModule:
                     OnPacket_UpdatePart_EngineModule(msg);
                     break;
                 case PacketType.UpdatePart_ParachuteModule:
                     OnPacket_UpdatePart_ParachuteModule(msg);
                     break;
-                case PacketType.DestroyPart:
-                    OnPacket_DestroyPart(msg);
-                    break;
-                case PacketType.UpdateStaging:
-                    OnPacket_UpdateStaging(msg);
+                case PacketType.UpdatePart_MoveModule:
+                    OnPacket_UpdatePart_MoveModule(msg);
                     break;
                 
                 // * Invalid Packets
@@ -392,8 +395,39 @@ namespace MultiplayerSFS.Mod
                     if (rocket.parts.TryGetValue(packet.PartId, out Part part))
                     {
                         ParachuteModule parachute = part.GetModules<ParachuteModule>()[0];
-                        parachute.state.Value = (float) packet.State;
-                        parachute.targetState.Value = (float) packet.TargetState;
+                        parachute.state.Value = packet.State;
+                        parachute.targetState.Value = packet.TargetState;
+                    }
+                }
+            }
+            else
+            {
+                Debug.LogError($"Missing rocket from world state!");
+            }
+        }
+
+        static void OnPacket_UpdatePart_MoveModule(NetIncomingMessage msg)
+        {
+            Packet_UpdatePart_MoveModule packet = msg.Read<Packet_UpdatePart_MoveModule>();
+            if (world.rockets.TryGetValue(packet.RocketId, out RocketState rocketState))
+            {
+                if (rocketState.parts.TryGetValue(packet.PartId, out PartState partState))
+				{
+					partState.part.NUMBER_VARIABLES["state"] = packet.Time;
+					partState.part.NUMBER_VARIABLES["state_target"] = packet.TargetTime;
+				}
+                
+                if (LocalManager.syncedRockets.TryGetValue(packet.RocketId, out LocalRocket rocket))
+                {
+                    if (rocket.parts.TryGetValue(packet.PartId, out Part part))
+                    {
+                        MoveModule[] modules = part.GetModules<MoveModule>();
+                        if (modules.Length > 1)
+                        {
+                            Debug.LogWarning($"OnPacket_UpdatePart_MoveModule: Found multiple move modules on part \"{part.Name}\".");
+                        }
+                        modules[0].time.Value = packet.Time;
+                        modules[0].targetTime.Value = packet.TargetTime;
                     }
                 }
             }
