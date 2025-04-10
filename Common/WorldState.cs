@@ -26,6 +26,17 @@ namespace MultiplayerSFS.Common
             dict.Add(id, item);
             return id;
         }
+
+        public static int InsertNew(this HashSet<int> set)
+        {
+            int id; do
+            {
+                id = generator.Next();
+            }
+            while (set.Contains(id));
+            set.Add(id);
+            return id;
+        }
     }
 
     public class WorldState

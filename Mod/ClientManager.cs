@@ -13,7 +13,6 @@ using SFS.Variables;
 using SFS.WorldBase;
 using SFS.Parts.Modules;
 using MultiplayerSFS.Common;
-using MultiplayerSFS.Mod.Patches;
 
 namespace MultiplayerSFS.Mod
 {

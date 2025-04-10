@@ -48,6 +48,7 @@ namespace MultiplayerSFS.Mod.Patches
         [HarmonyPatch(typeof(WorldBaseManager), "UpdateWorldPlaytime")]
         public class WorldBaseManager_UpdateWorldPlaytime
         {
+            // TODO: This can be replaced with a transpiler.
             public static bool Prefix(WorldBaseManager __instance)
             {
                 if (ClientManager.multiplayerEnabled.Value)

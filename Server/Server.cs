@@ -45,7 +45,11 @@ namespace MultiplayerSFS.Server
 				
 				while (true)
 				{
-					Listen();
+					if (Listen())
+                    {
+                        UpdatePlayerAuthorities();
+                    }
+
                     if (connectedPlayers.Values.Any(p => p.controlledRocket >= 0))
 					{
 						world.worldTime += worldTimer.Elapsed.TotalSeconds;
@@ -59,15 +63,19 @@ namespace MultiplayerSFS.Server
 			}
 		}
 
-		static void Listen()
+		/// <summary>
+		/// Returns `true` if a refresh of the players' update authorities is required.
+		/// </summary>
+		static bool Listen()
 		{
 			NetIncomingMessage msg;
+			bool requiresRefresh = false;
 			while ((msg = server.ReadMessage()) != null)
 			{
 				switch (msg.MessageType)
 				{
 					case NetIncomingMessageType.StatusChanged:
-						OnStatusChanged(msg);
+						requiresRefresh |= OnStatusChanged(msg);
 						break;
 					case NetIncomingMessageType.ConnectionApproval:
 						OnPlayerConnectionAttempt(msg);
@@ -76,7 +84,7 @@ namespace MultiplayerSFS.Server
 						OnLatencyUpdated(msg);
 						break;
 					case NetIncomingMessageType.Data:
-						OnIncomingPacket(msg);
+						requiresRefresh |= OnIncomingPacket(msg);
 						break;
 
 					case NetIncomingMessageType.DebugMessage:
@@ -93,9 +101,9 @@ namespace MultiplayerSFS.Server
 						Logger.Warning($"Unhandled message type: {msg.MessageType} - {msg.DeliveryMethod} - {msg.LengthBytes} bytes.");
 						break;
 				}
-
 				server.Recycle(msg);
 			}
+			return requiresRefresh;
 		}
 
 		static ConnectedPlayer FindPlayer(NetConnection connection)
@@ -128,7 +136,10 @@ namespace MultiplayerSFS.Server
 			server.SendToAll(msg, except, method, 0);
 		}
 
-		static void OnStatusChanged(NetIncomingMessage msg)
+		/// <summary>
+		/// Returns `true` if a refresh of the players' update authorities is required.
+		/// </summary>
+		static bool OnStatusChanged(NetIncomingMessage msg)
 		{
 			NetConnectionStatus status = (NetConnectionStatus) msg.ReadByte();
 			string reason = msg.ReadString();
@@ -139,12 +150,12 @@ namespace MultiplayerSFS.Server
 			{
 				case NetConnectionStatus.Disconnected:
 					OnPlayerDisconnect(msg.SenderConnection);
-					break;
+					return true;
 				case NetConnectionStatus.Connected:
 					OnPlayerSuccessfulConnect(msg.SenderConnection);
-					break;
+					return false;
 				default:
-					break;
+					return false;
 			}
 		}
 
@@ -205,7 +216,7 @@ namespace MultiplayerSFS.Server
 			ConnectedPlayer player = FindPlayer(connection);
 			if (player == null)
 			{
-				Logger.Warning("Missing new player while sending world info!");
+				Logger.Warning("Missing new player while sending join response!");
 				return;
 			}
 
@@ -284,23 +295,7 @@ namespace MultiplayerSFS.Server
 			}
 		}
 
-		static void OnCompleteResync()
-		{
-			Logger.Info("Sending complete resync...");
-			foreach (KeyValuePair<int, RocketState> kvp in world.rockets)
-			{
-				SendPacketToAll
-				(
-					new Packet_CreateRocket()
-					{
-						GlobalId = kvp.Key,
-						Rocket = kvp.Value,
-					}
-				);
-			}
-		}
-
-		static void UpdatePlayerAuthorities(KeyValuePair<int, int>? mustAssign = null)
+		static void UpdatePlayerAuthorities()
 		{
 			foreach (ConnectedPlayer player in connectedPlayers.Values)
 			{
@@ -323,13 +318,6 @@ namespace MultiplayerSFS.Server
                     {
                         maxCount = player.updateAuthority.Count;
                     }
-
-					if (player.id == mustAssign?.Key && kvp.Key == mustAssign?.Value)
-					{
-						// * Always give update authority to the player/rocket pair of `mustAssign` (used for newly-launched rockets, etc).
-						bestPlayer = player;
-						break;
-					}
 
                     if (world.rockets.TryGetValue(player.controlledRocket, out RocketState controlledRocket))
 					{
@@ -362,6 +350,17 @@ namespace MultiplayerSFS.Server
                     }
 
 				}
+				// TODO: There was a null ref exception coming from `UpdatePlayerAuthorities()`,
+				// TODO: but it only seems to occur in chaotic situations when lots of rockets are being destroyed,
+				// TODO: which is quite hard to debug. I'll probably see if other players report the error when I release the mod.
+				if (bestPlayer == null)
+				{
+					Logger.Error("bestPlayer is null!");
+				}
+				else if (bestPlayer.updateAuthority == null)
+				{
+					Logger.Error("bestPlayer.updateAuthority is null!");
+				}
 				bestPlayer.updateAuthority.Add(kvp.Key);
 			}
 
@@ -378,7 +377,10 @@ namespace MultiplayerSFS.Server
 			}
 		}
 
-        static void OnIncomingPacket(NetIncomingMessage msg)
+		/// <summary>
+		/// Returns `true` if a refresh of the players' update authorities is required.
+		/// </summary>
+        static bool OnIncomingPacket(NetIncomingMessage msg)
         {
             PacketType packetType = (PacketType) msg.ReadByte();
 			if (packetType != PacketType.UpdateRocket)
@@ -387,54 +389,54 @@ namespace MultiplayerSFS.Server
 			{
 				case PacketType.UpdatePlayerControl:
 					OnPacket_UpdatePlayerControl(msg);
-					break;
+					return true;
 
 				case PacketType.CreateRocket:
 					OnPacket_CreateRocket(msg);
-					break;
+					return true;
 				case PacketType.DestroyRocket:
 					OnPacket_DestroyRocket(msg);
-					break;
+					return true;
 				case PacketType.UpdateRocket:
 					OnPacket_UpdateRocket(msg);
-					break;
+					return false;
 
 				case PacketType.DestroyPart:
 					OnPacket_DestroyPart(msg);
-					break;
+					return false;
 				case PacketType.UpdateStaging:
 					OnPacket_UpdateStaging(msg);
-					break;
+					return false;
 				case PacketType.UpdatePart_EngineModule:
 					OnPacket_UpdatePart_EngineModule(msg);
-					break;
+					return false;
 				case PacketType.UpdatePart_WheelModule:
 					OnPacket_UpdatePart_WheelModule(msg);
-					break;
+					return false;
 				case PacketType.UpdatePart_BoosterModule:
 					OnPacket_UpdatePart_BoosterModule(msg);
-					break;
+					return false;
 				case PacketType.UpdatePart_ParachuteModule:
 					OnPacket_UpdatePart_ParachuteModule(msg);
-					break;
+					return false;
 				case PacketType.UpdatePart_MoveModule:
                     OnPacket_UpdatePart_MoveModule(msg);
-                    break;
+                    return false;
 				
 				case PacketType.JoinRequest:
 					Logger.Warning("Recieved join request outside of connection attempt.");
-					break;
+					return false;
 
 				case PacketType.PlayerConnected:
 				case PacketType.PlayerDisconnected:
 				case PacketType.JoinResponse:
 				case PacketType.UpdatePlayerAuthority:
 					Logger.Warning($"Recieved packet (of type {packetType}) intended for clients.");
-					break;
+					return false;
 
 				default:
 					Logger.Error($"Unhandled packet type: {packetType}, {msg.LengthBytes} bytes.");
-					break;
+					return false;
 			}
         }
 
@@ -452,7 +454,7 @@ namespace MultiplayerSFS.Server
 						packet,
 						msg.SenderConnection
 					);
-					UpdatePlayerAuthorities();
+					// UpdatePlayerAuthorities();
 				}
 				else
 				{
@@ -479,7 +481,18 @@ namespace MultiplayerSFS.Server
 				Logger.Debug($"new: {packet.Rocket.parts.Count}");
                 packet.GlobalId = world.rockets.InsertNew(packet.Rocket);
             	SendPacketToAll(packet);
-				UpdatePlayerAuthorities(new KeyValuePair<int, int>(FindPlayer(msg.SenderConnection).id, packet.GlobalId));
+				// UpdatePlayerAuthorities(new KeyValuePair<int, int>(FindPlayer(msg.SenderConnection).id, packet.GlobalId));
+				if (FindPlayer(msg.SenderConnection) is ConnectedPlayer player)
+				{
+					player.updateAuthority.Add(packet.GlobalId);
+					SendPacketToPlayer
+					(
+						msg.SenderConnection, new Packet_UpdatePlayerAuthority()
+						{
+							RocketIds = player.updateAuthority,
+						}
+					);
+				}
             }
 
 		}
@@ -490,7 +503,7 @@ namespace MultiplayerSFS.Server
 			if (world.rockets.Remove(packet.Id))
             {
                 SendPacketToAll(packet, msg.SenderConnection);
-            	UpdatePlayerAuthorities();
+            	// UpdatePlayerAuthorities();
             }
 		}
 
@@ -609,13 +622,7 @@ namespace MultiplayerSFS.Server
 
 		public ConnectedPlayer(string username)
 		{
-			HashSet<int> connectedPlayerIDs = Server.connectedPlayers.Select(kvp => kvp.Value.id).ToHashSet();
-			do
-			{
-				id = idGenerator.Next();
-			}
-			while (connectedPlayerIDs.Contains(id));
-
+            id = Server.connectedPlayers.Select(kvp => kvp.Value.id).ToHashSet().InsertNew();
 			this.username = username;
 			avgTripTime = float.PositiveInfinity;
 			controlledRocket = -1;

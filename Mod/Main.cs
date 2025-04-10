@@ -7,6 +7,7 @@ using SFS.UI;
 using SFS.Audio;
 using SFS.Translations;
 using SFS.World;
+using MultiplayerSFS.Common;
 
 namespace MultiplayerSFS.Mod
 {
@@ -39,7 +40,8 @@ namespace MultiplayerSFS.Mod
         public override void Load()
         {
             // ! VID CREATION ONLY
-            SceneHelper.OnWorldSceneLoaded += (System.Action) delegate {
+            SceneHelper.OnWorldSceneLoaded += (System.Action) delegate
+            {
                 if (ClientManager.multiplayerEnabled)
                 {
                     // SandboxSettings.main.settings.noGravity = true;
@@ -47,16 +49,35 @@ namespace MultiplayerSFS.Mod
                     SandboxSettings.main.settings.noHeatDamage = true;
                 }
             };
+
+            // * Send `UpdateControl` packet when the player leaves the world scene in multiplayer.
+            SceneHelper.OnWorldSceneUnloaded += (System.Action) delegate
+            {
+                if (ClientManager.multiplayerEnabled.Value)
+                {
+                    LocalManager.players[ClientManager.playerId].currentRocket.Value = -1;
+                    ClientManager.SendPacket
+                    (
+                        new Packet_UpdatePlayerControl()
+                        {
+                            PlayerId = ClientManager.playerId,
+                            RocketId = -1,
+                        }
+                    );
+                }
+            };
             AddMultiplayerButton();
             SceneHelper.OnHomeSceneLoaded += AddMultiplayerButton;
+
             buildPersistentFolder = new FolderPath(ModFolder).Extend(".BlueprintPersistent");
+            
+            Application.quitting += () => ClientManager.client?.Shutdown("Application quitting");
             ClientManager.multiplayerEnabled.OnChange += value => { Application.runInBackground = value; };
         }
 
         public static void AddMultiplayerButton()
         {
             ClientManager.multiplayerEnabled.Value = false;
-            Application.quitting += () => ClientManager.client?.Shutdown("Application quitting");
             
             Transform buttons = GameObject.Find("Buttons").transform;
             GameObject playButton = GameObject.Find("Play Button");

@@ -92,7 +92,6 @@ namespace MultiplayerSFS.Mod.Patches
         [HarmonyPatch(typeof(Part), nameof(Part.DestroyPart))]
         public class Part_DestroyPart
         {
-
             public static bool Prefix(Part __instance, bool createExplosion, ref DestructionReason reason)
             {
                 if (ClientManager.multiplayerEnabled && GameManager.main != null)
