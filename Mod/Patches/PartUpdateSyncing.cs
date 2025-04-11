@@ -8,9 +8,6 @@ using SFS.Parts.Modules;
 using MultiplayerSFS.Common;
 
 // ! TODO
-// UpdatePart_SplitModule,
-// WHEELS,
-// MOVE MODULES,
 // RESOURCES,
 // Burnmarks
 

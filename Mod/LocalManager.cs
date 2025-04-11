@@ -8,10 +8,10 @@ using SFS.UI;
 using SFS.Parts;
 using SFS.World;
 using SFS.Variables;
+using SFS.Parts.Modules;
 using ModLoader.Helpers;
 using MultiplayerSFS.Common;
 using Object = UnityEngine.Object;
-using MultiplayerSFS.Mod.Patches;
 
 namespace MultiplayerSFS.Mod
 {
@@ -51,8 +51,12 @@ namespace MultiplayerSFS.Mod
         /// <summary>
         /// The rate (in milliseconds) at which `UpdateRocket` packets will be sent to the server.
         /// </summary>
-        public static double updateRocketsPeriod = 20;
-        public static Timer updateTimer;
+        const double UpdateRocketsPeriod = 20;
+        static Timer updateTimer;
+        /// <summary>
+        /// `prevResourcePercents` is used to determine when `UpdatePart_ResourceModule` packets should be sent.
+        /// </summary>
+        static readonly Dictionary<ResourceModule, double> prevResourcePercents = new Dictionary<ResourceModule, double>();
 
         static Rocket RocketPrefab => AccessTools.StaticFieldRefAccess<Rocket>(typeof(RocketManager), "prefab");
 
@@ -68,7 +72,7 @@ namespace MultiplayerSFS.Mod
 
                 updateTimer = new Timer()
                 {
-                    Interval = updateRocketsPeriod,
+                    Interval = UpdateRocketsPeriod,
                     AutoReset = true,
                     Enabled = true,
                 };
@@ -85,6 +89,13 @@ namespace MultiplayerSFS.Mod
 
         public static void SendUpdatePackets()
         {
+            foreach (var module in prevResourcePercents.Keys.ToList())
+            {
+                if (module == null)
+                {
+                    prevResourcePercents.Remove(module);
+                }
+            }
             foreach (int id in updateAuthority)
             {
                 if (syncedRockets.TryGetValue(id, out LocalRocket localRocket) && localRocket.rocket is Rocket rocket)
@@ -113,6 +124,33 @@ namespace MultiplayerSFS.Mod
                         Debug.LogError("Missing rocket state while trying to send update packets!");
                     }
                     ClientManager.SendPacket(packet);
+
+                    // * ResourceModule updates
+                    if (rocket.physics.PhysicsMode)
+                    {
+                        foreach (ResourceModule module in rocket.resources.localGroups)
+                        {
+                            if (prevResourcePercents.TryGetValue(module, out double prevPercent))
+                            {
+                                if (prevPercent != module.resourcePercent.Value)
+                                {
+                                    ClientManager.SendPacket
+                                    (
+                                        new Packet_UpdatePart_ResourceModule()
+                                        {
+                                            RocketId = id,
+                                            PartIds = module.children
+                                                .Select(r => r.GetComponentInParent<Part>())
+                                                .Select(p => localRocket.GetPartID(p))
+                                                .ToHashSet(),
+                                            ResourcePercent = module.resourcePercent.Value,
+                                        }
+                                    );
+                                }
+                            }
+                            prevResourcePercents[module] = module.resourcePercent.Value;
+                        }
+                    }
                 }
                 else
                 {

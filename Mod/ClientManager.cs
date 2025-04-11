@@ -238,6 +238,9 @@ namespace MultiplayerSFS.Mod
                 case PacketType.UpdatePart_MoveModule:
                     OnPacket_UpdatePart_MoveModule(msg);
                     break;
+                case PacketType.UpdatePart_ResourceModule:
+                    OnPacket_UpdatePart_ResourceModule(msg);
+                    break;
                 
                 // * Invalid Packets
                 case PacketType.JoinResponse:
@@ -502,6 +505,40 @@ namespace MultiplayerSFS.Mod
                         }
                         modules[0].time.Value = packet.Time;
                         modules[0].targetTime.Value = packet.TargetTime;
+                    }
+                }
+            }
+            else
+            {
+                Debug.LogError($"Missing rocket from world state!");
+            }
+        }
+
+        static void OnPacket_UpdatePart_ResourceModule(NetIncomingMessage msg)
+        {
+            Packet_UpdatePart_ResourceModule packet = msg.Read<Packet_UpdatePart_ResourceModule>();
+            if (world.rockets.TryGetValue(packet.RocketId, out RocketState rocketState))
+            {
+                foreach (int partId in packet.PartIds)
+                {
+                    if (rocketState.parts.TryGetValue(partId, out PartState partState))
+                    {
+                        // TODO! A lot of these save variable names will most likely be different for non-vanilla parts, but currently idk what the best way to properly get them is.
+                        // TODO! I might need some form of register that associates a part's name and module variable names to their save variable names.
+                        partState.part.NUMBER_VARIABLES["fuel_percent"] = packet.ResourcePercent;
+                    }
+                    
+                    if (LocalManager.syncedRockets.TryGetValue(packet.RocketId, out LocalRocket rocket))
+                    {
+                        if (rocket.parts.TryGetValue(partId, out Part part))
+                        {
+                            ResourceModule[] modules = part.GetModules<ResourceModule>();
+                            if (modules.Length > 1)
+                            {
+                                Debug.LogWarning($"OnPacket_UpdatePart_ResourceModule: Found multiple resource modules on part \"{part.Name}\".");
+                            }
+                            modules[0].resourcePercent.Value = packet.ResourcePercent;
+                        }
                     }
                 }
             }

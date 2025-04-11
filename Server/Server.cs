@@ -422,6 +422,9 @@ namespace MultiplayerSFS.Server
 				case PacketType.UpdatePart_MoveModule:
                     OnPacket_UpdatePart_MoveModule(msg);
                     return false;
+				case PacketType.UpdatePart_ResourceModule:
+                    OnPacket_UpdatePart_ResourceModule(msg);
+                    return false;
 				
 				case PacketType.JoinRequest:
 					Logger.Warning("Recieved join request outside of connection attempt.");
@@ -607,11 +610,33 @@ namespace MultiplayerSFS.Server
 				}
 			}
 		}
+
+		static void OnPacket_UpdatePart_ResourceModule(NetIncomingMessage msg)
+		{
+			Packet_UpdatePart_ResourceModule packet = msg.Read<Packet_UpdatePart_ResourceModule>();
+			if (world.rockets.TryGetValue(packet.RocketId, out RocketState state))
+			{
+				bool foundPart = false;
+				foreach (int partId in packet.PartIds)
+                {
+                    if (state.parts.TryGetValue(partId, out PartState partState))
+                    {
+                        // TODO! A lot of these save variable names will most likely be different for non-vanilla parts, but currently idk what the best way to properly get them is.
+                        // TODO! I might need some form of register that associates a part's name and module variable names to their save variable names.
+                        partState.part.NUMBER_VARIABLES["fuel_percent"] = packet.ResourcePercent;
+						foundPart = true;
+                    }
+                }
+				if (foundPart)
+				{
+					SendPacketToAll(packet, msg.SenderConnection);
+				}
+			}
+		}
 	}
 
 	public class ConnectedPlayer
 	{
-		public static Random idGenerator = new Random();
 		public int id;
 		public string username;
 		public float avgTripTime;
