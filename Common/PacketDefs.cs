@@ -38,6 +38,14 @@ namespace MultiplayerSFS.Common
         /// Sent by the server to keep the world time synchronised between players & the server, taking into account latency.
         /// </summary>
         UpdateWorldTime,
+        /// <summary>
+        /// Sent by players to update their map icon/chat color.
+        /// </summary>
+        UpdatePlayerColor,
+        /// <summary>
+        /// Sent by players or the server to send a message in the multiplayer chat.
+        /// </summary>
+        SendChatMessage,
 
         // * Rocket Packets
         /// <summary>
@@ -119,6 +127,7 @@ namespace MultiplayerSFS.Common
     {
         public int PlayerId { get; set; } = -1;
         public double UpdateRocketsPeriod { get; set; }
+        public double ChatMessageCooldown { get; set; }
         public double WorldTime { get; set; }
         public double SendTime { get; set; }
         public Difficulty.DifficultyType Difficulty { get; set; }
@@ -128,6 +137,7 @@ namespace MultiplayerSFS.Common
         {
             msg.Write(PlayerId);
             msg.Write(UpdateRocketsPeriod);
+            msg.Write(ChatMessageCooldown);
             msg.Write(WorldTime);
             msg.Write(SendTime);
             msg.Write((byte) Difficulty);
@@ -137,6 +147,7 @@ namespace MultiplayerSFS.Common
         {
             PlayerId = msg.ReadInt32();
             UpdateRocketsPeriod = msg.ReadDouble();
+            ChatMessageCooldown = msg.ReadDouble();
             WorldTime = msg.ReadDouble();
             SendTime = msg.ReadDouble();
             Difficulty = (Difficulty.DifficultyType) msg.ReadByte();
@@ -146,6 +157,7 @@ namespace MultiplayerSFS.Common
     {
         public int Id { get; set; } = -1;
         public string Username { get; set; }
+        public Color IconColor { get; set; }
         public bool PrintMessage { get; set; }
 
         public override PacketType Type => PacketType.PlayerConnected;
@@ -153,12 +165,14 @@ namespace MultiplayerSFS.Common
         {
             msg.Write(Id);
             msg.Write(Username);
+            msg.Write(IconColor);
             msg.Write(PrintMessage);
         }
         public override void Deserialize(NetIncomingMessage msg)
         {
             Id = msg.ReadInt32();
             Username = msg.ReadString();
+            IconColor = msg.ReadColor();
             PrintMessage = msg.ReadBoolean();
         }
     }
@@ -220,6 +234,42 @@ namespace MultiplayerSFS.Common
         public override void Deserialize(NetIncomingMessage msg)
         {
             WorldTime = msg.ReadDouble();
+        }
+    }
+
+    public class Packet_UpdatePlayerColor : Packet
+    {
+        public int PlayerId { get; set; } = -1;
+        public Color Color { get; set; }
+
+        public override PacketType Type => PacketType.UpdatePlayerColor;
+        public override void Serialize(NetOutgoingMessage msg)
+        {
+            msg.Write(PlayerId);
+            msg.Write(Color);
+        }
+        public override void Deserialize(NetIncomingMessage msg)
+        {
+            PlayerId = msg.ReadInt32();
+            Color = msg.ReadColor();
+        }
+    }
+
+    public class Packet_SendChatMessage : Packet
+    {
+        public int SenderId { get; set; } = -1;
+        public string Message { get; set; }
+
+        public override PacketType Type => PacketType.SendChatMessage;
+        public override void Serialize(NetOutgoingMessage msg)
+        {
+            msg.Write(SenderId);
+            msg.Write(Message);
+        }
+        public override void Deserialize(NetIncomingMessage msg)
+        {
+            SenderId = msg.ReadInt32();
+            Message = msg.ReadString();
         }
     }
 

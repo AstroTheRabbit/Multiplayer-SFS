@@ -1,13 +1,15 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using HarmonyLib;
 using UnityEngine;
-using ModLoader.Helpers;
 using SFS.IO;
 using SFS.UI;
+using SFS.World;
 using SFS.Audio;
 using SFS.Translations;
-using SFS.World;
+using ModLoader.Helpers;
 using MultiplayerSFS.Common;
+using Object = UnityEngine.Object;
 
 namespace MultiplayerSFS.Mod
 {
@@ -39,23 +41,19 @@ namespace MultiplayerSFS.Mod
 
         public override void Load()
         {
-            // ! VID CREATION ONLY
-            SceneHelper.OnWorldSceneLoaded += (System.Action) delegate
+            SceneHelper.OnWorldSceneLoaded += (Action) delegate
             {
                 if (ClientManager.multiplayerEnabled)
                 {
-                    // SandboxSettings.main.settings.noGravity = true;
-                    // SandboxSettings.main.settings.infiniteFuel = true;
-                    SandboxSettings.main.settings.noHeatDamage = true;
+                    ChatWindow.CreateUI();
                 }
             };
-
-            // * Send `UpdateControl` packet when the player leaves the world scene in multiplayer.
-            SceneHelper.OnWorldSceneUnloaded += (System.Action) delegate
+            SceneHelper.OnWorldSceneUnloaded += (Action) delegate
             {
                 if (ClientManager.multiplayerEnabled.Value)
                 {
-                    LocalManager.players[ClientManager.playerId].currentRocket.Value = -1;
+                    // * Send `UpdateControl` packet when the player leaves the world scene in multiplayer.
+                    LocalManager.Player.currentRocket.Value = -1;
                     ClientManager.SendPacket
                     (
                         new Packet_UpdatePlayerControl()
@@ -64,15 +62,33 @@ namespace MultiplayerSFS.Mod
                             RocketId = -1,
                         }
                     );
+                    ChatWindow.DestroyUI();
                 }
             };
-            AddMultiplayerButton();
+            SceneHelper.OnBuildSceneLoaded += (Action) delegate
+            {
+                ChatWindow.CreateUI();
+            };
+            SceneHelper.OnBuildSceneUnloaded += (Action) delegate
+            {
+                ChatWindow.DestroyUI();
+            };
             SceneHelper.OnHomeSceneLoaded += AddMultiplayerButton;
+
+            AddMultiplayerButton();
 
             buildPersistentFolder = new FolderPath(ModFolder).Extend(".BlueprintPersistent");
             
             Application.quitting += () => ClientManager.client?.Shutdown("Application quitting");
-            ClientManager.multiplayerEnabled.OnChange += value => { Application.runInBackground = value; };
+            
+            ClientManager.multiplayerEnabled.OnChange += value =>
+            {
+                Application.runInBackground = value;
+                if (!value)
+                {
+                    ChatWindow.DestroyCooldownTimer();
+                }
+            };
         }
 
         public static void AddMultiplayerButton()

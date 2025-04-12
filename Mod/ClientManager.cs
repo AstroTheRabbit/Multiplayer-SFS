@@ -38,7 +38,7 @@ namespace MultiplayerSFS.Mod
             npc.EnableMessageType(NetIncomingMessageType.StatusChanged);
 			npc.EnableMessageType(NetIncomingMessageType.UnconnectedData);
 			npc.EnableMessageType(NetIncomingMessageType.VerboseDebugMessage);
-            // TODO: ping readout UI
+            // TODO: ping readout UI?
 			// npc.EnableMessageType(NetIncomingMessageType.ConnectionLatencyUpdated);
             
             client = new NetClient(npc);
@@ -108,11 +108,14 @@ namespace MultiplayerSFS.Mod
         public static void LoadWorld()
         {
             Menu.loading.Open("Loading multiplayer world...");
-
-            LocalManager.Initialize();
             
             Packet_JoinResponse response = client.ServerConnection.RemoteHailMessage.Read<Packet_JoinResponse>();
             playerId = response.PlayerId;
+            
+            LocalManager.updateRocketsPeriod = response.UpdateRocketsPeriod;
+            LocalManager.Initialize();
+
+            ChatWindow.CreateCooldownTimer(response.ChatMessageCooldown);
             
             world = new WorldState
             {
@@ -204,6 +207,12 @@ namespace MultiplayerSFS.Mod
                 case PacketType.UpdateWorldTime:
                     OnPacket_UpdateWorldTime(msg);
                     break;
+                case PacketType.UpdatePlayerColor:
+                    OnPacket_UpdatePlayerColor(msg);
+                    break;
+                case PacketType.SendChatMessage:
+                    OnPacket_SendChatMessage(msg);
+                    break;
 
                 // * Rocket Packets
                 case PacketType.CreateRocket:
@@ -268,10 +277,12 @@ namespace MultiplayerSFS.Mod
         static void OnPacket_PlayerConnected(NetIncomingMessage msg)
         {
             Packet_PlayerConnected packet = msg.Read<Packet_PlayerConnected>();
-            LocalManager.players.Add(packet.Id, new LocalPlayer(packet.Username));
+            LocalManager.players.Add(packet.Id, new LocalPlayer(packet.Username, packet.IconColor));
             if (packet.PrintMessage)
             {
-                MsgDrawer.main.Log($"'{packet.Username}' connected");
+                string message = $"{packet.Username} connected";
+                MsgDrawer.main.Log(message);
+                ChatWindow.AddMessage(new ChatMessage(message));
             }
         }
 
@@ -280,8 +291,9 @@ namespace MultiplayerSFS.Mod
             Packet_PlayerDisconnected packet = msg.Read<Packet_PlayerDisconnected>();
             if (LocalManager.players.TryGetValue(packet.Id, out LocalPlayer player))
             {
-                MsgDrawer.main.Log($"'{player.username}' disconnected");
-                LocalManager.players.Remove(packet.Id);
+                string message = $"{player.username} disconnected";
+                MsgDrawer.main.Log(message);
+                ChatWindow.AddMessage(new ChatMessage(message));
             }
         }
 
@@ -311,6 +323,22 @@ namespace MultiplayerSFS.Mod
             {
                 WorldTime.main.worldTime = packet.WorldTime;
             }
+        }
+        
+        static void OnPacket_UpdatePlayerColor(NetIncomingMessage msg)
+        {
+            Packet_UpdatePlayerColor packet = msg.Read<Packet_UpdatePlayerColor>();
+            if (LocalManager.players.TryGetValue(packet.PlayerId, out LocalPlayer player))
+            {
+                player.iconColor = packet.Color;
+                ChatWindow.OnPlayerColorChange(packet.PlayerId, packet.Color);
+            }
+        }
+
+        static void OnPacket_SendChatMessage(NetIncomingMessage msg)
+        {
+            Packet_SendChatMessage packet = msg.Read<Packet_SendChatMessage>();
+            ChatWindow.AddMessage(new ChatMessage(packet.Message, packet.SenderId));
         }
 
         static void OnPacket_CreateRocket(NetIncomingMessage msg)

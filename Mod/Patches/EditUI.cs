@@ -1,5 +1,6 @@
 using System.Linq;
 using System.Collections.Generic;
+using UnityEngine;
 using HarmonyLib;
 using SFS;
 using SFS.UI;
@@ -7,12 +8,14 @@ using SFS.Input;
 using SFS.World;
 using SFS.Builds;
 using SFS.Career;
+using SFS.World.Maps;
 using SFS.Translations;
 
 namespace MultiplayerSFS.Mod.Patches
 {
     /// <summary>
     /// Changes various UI screens to remove elements that would break in multiplayer.
+    /// Also applies multiplayer colors to rockets' map icons.
     /// </summary>
     public class EditUI
     {
@@ -141,6 +144,45 @@ namespace MultiplayerSFS.Mod.Patches
                     return false;
                 }
                 return true;
+            }
+        }
+
+        [HarmonyPatch(typeof(MapIcon), "UpdateAlpha")]
+        public static class MapIcon_UpdateAlpha
+        {
+            public static void Postfix(MapIcon __instance)
+            {
+                Rocket rocket = __instance.GetComponent<Rocket>();
+                int id = LocalManager.GetSyncedRocketID(rocket);
+                foreach (LocalPlayer player in LocalManager.players.Values)
+                {
+                    if (player.currentRocket == id)
+                    {
+                        SpriteRenderer renderer = __instance.mapIcon.GetComponentInChildren<SpriteRenderer>();
+                        renderer.color = new Color
+                        (
+                            // * multiplied with the result of `UpdateAlpha` so that stuff like VanillaUpgrades' patch still shows.
+                            renderer.color.r * player.iconColor.r,
+                            renderer.color.g * player.iconColor.g,
+                            renderer.color.b * player.iconColor.b,
+                            renderer.color.a
+                        );
+                        return;
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// Stops the world or build screens from processing input if the player is typing the multiplayer chat.
+        /// This *really* should be in the vanilla game lol.
+        /// </summary>
+        [HarmonyPatch(typeof(Screen_Game), nameof(Screen_Game.ProcessInput))]
+        class Screen_Game_ProcessInput
+        {
+            static bool Prefix()
+            {
+                return !ChatWindow.InputSelected;
             }
         }
     }

@@ -22,6 +22,20 @@ namespace MultiplayerSFS.Mod
         /// </summary>
         public static Dictionary<int, LocalPlayer> players;
         /// <summary>
+        /// This client's `LocalPlayer` instance.
+        /// </summary>
+        public static LocalPlayer Player
+        {
+            get
+            {
+                if (players.TryGetValue(ClientManager.playerId, out LocalPlayer player))
+                    return player;
+                else
+                    return null;
+            }
+        }
+
+        /// <summary>
         /// Rockets that are synced with the server and are visible to all other players.
         /// </summary>
         public static Dictionary<int, LocalRocket> syncedRockets;
@@ -51,7 +65,7 @@ namespace MultiplayerSFS.Mod
         /// <summary>
         /// The rate (in milliseconds) at which `UpdateRocket` packets will be sent to the server.
         /// </summary>
-        const double UpdateRocketsPeriod = 20;
+        public static double updateRocketsPeriod = 20;
         static Timer updateTimer;
         /// <summary>
         /// `prevResourcePercents` is used to determine when `UpdatePart_ResourceModule` packets should be sent.
@@ -72,7 +86,7 @@ namespace MultiplayerSFS.Mod
 
                 updateTimer = new Timer()
                 {
-                    Interval = UpdateRocketsPeriod,
+                    Interval = updateRocketsPeriod,
                     AutoReset = true,
                     Enabled = true,
                 };
@@ -300,7 +314,7 @@ namespace MultiplayerSFS.Mod
             {
                 LocalRocket synced = SpawnLocalRocket(packet.Rocket);
                 syncedRockets.Add(packet.GlobalId, synced);
-                if (players[ClientManager.playerId].currentRocket == packet.GlobalId)
+                if (Player.currentRocket == packet.GlobalId)
                 {
                     // * Complete resync was sent for this client's rocket.
                     PlayerController.main.player.Value = synced.rocket;
@@ -451,16 +465,23 @@ namespace MultiplayerSFS.Mod
         /// </summary>
         public Int_Local currentRocket;
 
-        public LocalPlayer(string username)
+        /// <summary>
+        /// Color used to distinguish this player from other rockets in map view. Also used to color their username in the chat window.
+        /// </summary>
+        public Color iconColor;
+
+        public LocalPlayer(string username, Color color)
         {
             this.username = username;
             currentRocket = new Int_Local() { Value = -1 };
             currentRocket.OnChange += OnControlledRocketChange;
+            iconColor = color;
         }
 
         public void OnControlledRocketChange(int oldId, int newId)
         {
-            // TODO: Name tags above controlled rockets (on map as well?).
+            // TODO: Name tags above controlled rockets.
+            // TODO: Colored icons in map view.
         }
     }
 }

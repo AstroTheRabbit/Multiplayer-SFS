@@ -76,6 +76,18 @@ namespace MultiplayerSFS.Common
             );
         }
 
+        public static void Write(this NetOutgoingMessage msg, Color color)
+        {
+            msg.Write(color.r);
+            msg.Write(color.g);
+            msg.Write(color.b);
+        }
+
+        public static Color ReadColor(this NetIncomingMessage msg)
+        {
+            return new Color(msg.ReadFloat(), msg.ReadFloat(), msg.ReadFloat());
+        }
+
         public static void Write(this NetOutgoingMessage msg, WorldSave.LocationData location)
         {
             msg.Write(location.address);

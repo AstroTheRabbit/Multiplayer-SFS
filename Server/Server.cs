@@ -1,9 +1,9 @@
 using System;
 using System.Net;
 using System.Linq;
-using System.Timers;
 using System.Diagnostics;
 using System.Collections.Generic;
+using UnityEngine;
 using Lidgren.Network;
 using MultiplayerSFS.Common;
 
@@ -199,6 +199,7 @@ namespace MultiplayerSFS.Server
 				{
 					PlayerId = newPlayer.id,
 					UpdateRocketsPeriod = settings.updateRocketsPeriod,
+					ChatMessageCooldown = settings.chatMessageCooldown,
 					WorldTime = world.worldTime,
 					Difficulty = world.difficulty,
 				}
@@ -251,6 +252,7 @@ namespace MultiplayerSFS.Server
 					{
 						Id = kvp.Value.id,
 						Username = kvp.Value.username,
+						IconColor = kvp.Value.iconColor,
 						PrintMessage = false,
 					}
 				);
@@ -390,6 +392,12 @@ namespace MultiplayerSFS.Server
 				case PacketType.UpdatePlayerControl:
 					OnPacket_UpdatePlayerControl(msg);
 					return true;
+				case PacketType.UpdatePlayerColor:
+                    OnPacket_UpdatePlayerColor(msg);
+                    return false;
+				case PacketType.SendChatMessage:
+                    OnPacket_SendChatMessage(msg);
+                    return false;
 
 				case PacketType.CreateRocket:
 					OnPacket_CreateRocket(msg);
@@ -457,7 +465,6 @@ namespace MultiplayerSFS.Server
 						packet,
 						msg.SenderConnection
 					);
-					// UpdatePlayerAuthorities();
 				}
 				else
 				{
@@ -469,6 +476,22 @@ namespace MultiplayerSFS.Server
 				Logger.Error("Missing connected player while trying to update controlled rocket!");
 			}
 		}
+
+		static void OnPacket_UpdatePlayerColor(NetIncomingMessage msg)
+        {
+            Packet_UpdatePlayerColor packet = msg.Read<Packet_UpdatePlayerColor>();
+			if (FindPlayer(msg.SenderConnection) is ConnectedPlayer player)
+            {
+                player.iconColor = packet.Color;
+				SendPacketToAll(packet, msg.SenderConnection);
+            }
+        }
+
+		static void OnPacket_SendChatMessage(NetIncomingMessage msg)
+        {
+            Packet_SendChatMessage packet = msg.Read<Packet_SendChatMessage>();
+			SendPacketToAll(packet, msg.SenderConnection);
+        }
 
 		static void OnPacket_CreateRocket(NetIncomingMessage msg)
 		{
@@ -639,16 +662,18 @@ namespace MultiplayerSFS.Server
 	{
 		public int id;
 		public string username;
+		public Color iconColor;
 		public float avgTripTime;
 
 		public int controlledRocket;
 		public HashSet<int> updateAuthority;
 
 
-		public ConnectedPlayer(string username)
+		public ConnectedPlayer(string playerName)
 		{
             id = Server.connectedPlayers.Select(kvp => kvp.Value.id).ToHashSet().InsertNew();
-			this.username = username;
+			username = playerName;
+			iconColor = Color.red;
 			avgTripTime = float.PositiveInfinity;
 			controlledRocket = -1;
 			updateAuthority = new HashSet<int>();

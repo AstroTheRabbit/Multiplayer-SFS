@@ -32,7 +32,7 @@ namespace MultiplayerSFS.Mod.Patches
                             return false;
                         }
                         
-                        LocalManager.players[ClientManager.playerId].currentRocket.Value = id;
+                        LocalManager.Player.currentRocket.Value = id;
                         ClientManager.SendPacket
                         (
                             new Packet_UpdatePlayerControl()
