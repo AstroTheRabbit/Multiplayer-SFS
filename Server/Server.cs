@@ -332,7 +332,7 @@ namespace MultiplayerSFS.Server
 
 						// * Players in 'load range' of a rocket should have update authority over that rocket.
 						Double2 distance = controlledRocket.location.position - kvp.Value.location.position;
-						if (distance.sqrMagnitude <= settings.sqrLoadRange)
+						if (distance.magnitude <= settings.loadRange)
 						{
 							// * If two or more players are in load range of a rocket, update authority should be given to the player with the lowest latency.
 							if (bestPlayer != null && bestPlayer.avgTripTime < player.avgTripTime)
