@@ -10,24 +10,6 @@ namespace MultiplayerSFS.Server
 	    private const string CONFIG_FILENAME = "Multiplayer.cfg";
 		public static void Main()
 		{
-			/*
-			if (IsAdministrator() == false)
-			{
-				// Restart program and run as admin
-				var exeName = Process.GetCurrentProcess().MainModule.FileName;
-				ProcessStartInfo startInfo = new ProcessStartInfo(exeName);
-				startInfo.Verb = "runas";
-				Process.Start(startInfo);
-				return;
-			}
-
-			bool IsAdministrator()
-			{
-				WindowsIdentity identity = WindowsIdentity.GetCurrent();
-				WindowsPrincipal principal = new WindowsPrincipal(identity);
-				return principal.IsInRole(WindowsBuiltInRole.Administrator);
-			}*/
-			
 			try
 			{
 				if (!File.Exists(CONFIG_FILENAME))
