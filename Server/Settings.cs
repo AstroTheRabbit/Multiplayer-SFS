@@ -33,7 +33,7 @@ namespace MultiplayerSFS.Server
 		public string password = "";
 
 		[ServerConfigVariable(
-			"The maximum number of connected players allowed at any one time")]
+			"The maximum number of connected players allowed at any one time.")]
 		public int maxConnections = 16;
 		
 		[ServerConfigVariable(
