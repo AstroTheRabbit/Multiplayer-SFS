@@ -45,12 +45,12 @@ namespace MultiplayerSFS.Mod
             {
                 if (ClientManager.multiplayerEnabled)
                 {
-                    ChatWindow.CreateUI();
+                    ChatWindow.CreateUI("world");
                 }
             };
             SceneHelper.OnWorldSceneUnloaded += (Action) delegate
             {
-                if (ClientManager.multiplayerEnabled.Value)
+                if (ClientManager.multiplayerEnabled)
                 {
                     // * Send `UpdateControl` packet when the player leaves the world scene in multiplayer.
                     LocalManager.Player.currentRocket.Value = -1;
@@ -67,14 +67,22 @@ namespace MultiplayerSFS.Mod
             };
             SceneHelper.OnBuildSceneLoaded += (Action) delegate
             {
-                ChatWindow.CreateUI();
+                ChatWindow.CreateUI("build");
             };
             SceneHelper.OnBuildSceneUnloaded += (Action) delegate
             {
                 ChatWindow.DestroyUI();
             };
-            SceneHelper.OnHomeSceneLoaded += AddMultiplayerButton;
+            SceneHelper.OnHubSceneLoaded += (Action) delegate
+            {
+                ChatWindow.CreateUI("hub");
+            };
+            SceneHelper.OnHubSceneUnloaded += (Action) delegate
+            {
+                ChatWindow.DestroyUI();
+            };
 
+            SceneHelper.OnHomeSceneLoaded += AddMultiplayerButton;
             AddMultiplayerButton();
 
             buildPersistentFolder = new FolderPath(ModFolder).Extend(".BlueprintPersistent");

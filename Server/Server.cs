@@ -192,8 +192,8 @@ namespace MultiplayerSFS.Server
             ConnectedPlayer newPlayer = new ConnectedPlayer(request.Username);
 			connectedPlayers.Add(connection.RemoteEndPoint, newPlayer);
 
-			NetOutgoingMessage hail = server.CreateMessage();
-			hail.Write
+			NetOutgoingMessage joinResponse = server.CreateMessage();
+			joinResponse.Write
 			(
 				new Packet_JoinResponse()
 				{
@@ -204,7 +204,7 @@ namespace MultiplayerSFS.Server
 					Difficulty = world.difficulty,
 				}
 			);
-			connection.Approve(hail);
+			connection.Approve(joinResponse);
 			return;
 
 			ConnectionDenied:
@@ -291,7 +291,7 @@ namespace MultiplayerSFS.Server
 					msg.SenderConnection,
 					new Packet_UpdateWorldTime()
 					{
-						WorldTime = world.worldTime + (player.avgTripTime / 2),
+						WorldTime = world.worldTime,
 					}
 				);
 			}

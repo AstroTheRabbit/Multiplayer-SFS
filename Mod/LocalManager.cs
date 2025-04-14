@@ -339,31 +339,31 @@ namespace MultiplayerSFS.Mod
                 rocket.rocket.throttle.throttleOn.Value = packet.ThrottleOn;
 
                 // TODO! Interpolation to prevent jitter (especially when moving at high speeds like orbit).
-                Location loc = packet.Location.GetSaveLocation(packet.WorldTime);
-                double delta = WorldTime.main.worldTime - packet.WorldTime;
-                // Debug.Log(delta);
+                Location loc = packet.Location.GetSaveLocation(WorldTime.main.worldTime);
+                double delta = loc.time - packet.WorldTime;
+                Debug.Log(delta);
 
-                // if (loc.Height > 100 && delta > 0)
-                // {
-                //     const int interpolationSteps = 10;
-                //     double dt = delta / interpolationSteps;
+                if (loc.TerrainHeight > 50)
+                {
+                    const int interpolationSteps = 50;
+                    double dt = delta / interpolationSteps;
 
-                //     Double2 pos = loc.position;
-                //     Double2 vel = loc.velocity;
-                //     Double2 acc = loc.planet.GetGravity(pos);
+                    Double2 pos = loc.position;
+                    Double2 vel = loc.velocity;
+                    Double2 acc = loc.planet.GetGravity(pos);
 
-                //     for (int i = 0; i < interpolationSteps; i++)
-                //     {
-                //         Double2 newPos = pos + (vel * dt) + (0.5 * acc * dt * dt);
-                //         Double2 newAcc = loc.planet.GetGravity(newPos);
-                //         Double2 newVel = vel + (acc + newAcc) * (0.5 * dt);
+                    for (int i = 0; i < interpolationSteps; i++)
+                    {
+                        Double2 newPos = pos + (vel * dt) + (0.5 * acc * dt * dt);
+                        Double2 newAcc = loc.planet.GetGravity(newPos);
+                        Double2 newVel = vel + (acc + newAcc) * (0.5 * dt);
 
-                //         pos = newPos;
-                //         vel = newVel;
-                //         acc = newAcc;
-                //     }
-                //     loc = new Location(loc.planet, pos, vel);
-                // }
+                        pos = newPos;
+                        vel = newVel;
+                        acc = newAcc;
+                    }
+                    loc = new Location(loc.planet, pos, vel);
+                }
                 rocket.rocket.physics.SetLocationAndState(loc, rocket.rocket.physics.PhysicsMode);
             }
         }

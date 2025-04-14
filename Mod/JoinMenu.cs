@@ -47,7 +47,8 @@ namespace MultiplayerSFS.Mod
                 ScreenManager.main.OpenScreen(() => this);
                 windowHolder.SetActive(true);
                 ClientManager.multiplayerEnabled.Value = true;
-                window = Builder.CreateWindow(
+                window = Builder.CreateWindow
+                (
                     windowHolder.transform,
                     windowID,
                     windowSize.x,
@@ -152,7 +153,7 @@ namespace MultiplayerSFS.Mod
                 input_username.FieldColor  = defaultTextInputColor;
                 input_password.FieldColor  = defaultTextInputColor;
 
-                if (TryParseAddress(input_address.Text) is null)
+                if (await TryParseAddress(input_address.Text) is null)
                 {
                     input_address.FieldColor = Color.red;
                     MsgDrawer.main.Log("IP address is invalid");

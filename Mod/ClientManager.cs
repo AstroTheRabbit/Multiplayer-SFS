@@ -294,6 +294,7 @@ namespace MultiplayerSFS.Mod
                 string message = $"{player.username} disconnected";
                 MsgDrawer.main.Log(message);
                 ChatWindow.AddMessage(new ChatMessage(message));
+                LocalManager.players.Remove(packet.Id);
             }
         }
 

@@ -152,22 +152,25 @@ namespace MultiplayerSFS.Mod.Patches
         {
             public static void Postfix(MapIcon __instance)
             {
-                Rocket rocket = __instance.GetComponent<Rocket>();
-                int id = LocalManager.GetSyncedRocketID(rocket);
-                foreach (LocalPlayer player in LocalManager.players.Values)
+                if (ClientManager.multiplayerEnabled)
                 {
-                    if (player.currentRocket == id)
+                    Rocket rocket = __instance.GetComponent<Rocket>();
+                    int id = LocalManager.GetSyncedRocketID(rocket);
+                    foreach (LocalPlayer player in LocalManager.players.Values)
                     {
-                        SpriteRenderer renderer = __instance.mapIcon.GetComponentInChildren<SpriteRenderer>();
-                        renderer.color = new Color
-                        (
-                            // * multiplied with the result of `UpdateAlpha` so that stuff like VanillaUpgrades' patch still shows.
-                            renderer.color.r * player.iconColor.r,
-                            renderer.color.g * player.iconColor.g,
-                            renderer.color.b * player.iconColor.b,
-                            renderer.color.a
-                        );
-                        return;
+                        if (player.currentRocket == id)
+                        {
+                            SpriteRenderer renderer = __instance.mapIcon.GetComponentInChildren<SpriteRenderer>();
+                            renderer.color = new Color
+                            (
+                                // * multiplied with the result of `UpdateAlpha` so that stuff like VanillaUpgrades' patch still shows.
+                                renderer.color.r * player.iconColor.r,
+                                renderer.color.g * player.iconColor.g,
+                                renderer.color.b * player.iconColor.b,
+                                renderer.color.a
+                            );
+                            return;
+                        }
                     }
                 }
             }

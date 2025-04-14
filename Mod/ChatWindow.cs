@@ -44,13 +44,15 @@ namespace MultiplayerSFS.Mod
         public static bool canSendMessage = true;
         public static TextInput input_sendMessage;
 
-        public static async void CreateUI()
+        public static async void CreateUI(string sceneName)
         {
-            if (holder_window != null)
+            if (holder_window != null || !ClientManager.multiplayerEnabled)
                 return;
 
             while (LocalManager.Player == null)
             {
+                if (ClientManager.multiplayerEnabled)
+                    return;
                 await Task.Yield();
             }
 
@@ -66,7 +68,7 @@ namespace MultiplayerSFS.Mod
                 titleText: "Multiplayer Chat"
             );
             window.CreateLayoutGroup(Type.Vertical);
-            window.RegisterPermanentSaving("multiplayer-sfs.chat-window");
+            window.RegisterPermanentSaving($"multiplayer-sfs.chat-window.{sceneName}");
             int RemainingHeight = WindowHeight - 80;
 
             container_colorPicker = Builder.CreateContainer(window);
@@ -76,11 +78,13 @@ namespace MultiplayerSFS.Mod
             hue *= 100;
 
             input_colorPicker = UIToolsBuilder.CreateNumberInput(container_colorPicker, InnerWidth / 3, 50, hue, 5f);
+            label_colorPicker = Builder.CreateLabel(container_colorPicker, InnerWidth / 6, 50, text: "▲");
+            button_colorPicker = Builder.CreateButton(container_colorPicker, InnerWidth / 3, 50, onClick: OnColorPickerSubmit, text: "Change");
+            
             TMP_InputField field = input_colorPicker.FieldRef<TextInput>("input").field;
             field.onSelect.AddListener(_ => InputSelected = true);
             field.onDeselect.AddListener(_ => InputSelected = false);
-            label_colorPicker = Builder.CreateLabel(container_colorPicker, InnerWidth / 6, 50, text: "▲");
-            button_colorPicker = Builder.CreateButton(container_colorPicker, InnerWidth / 3, 50, onClick: OnColorPickerSubmit, text: "Change");
+
             input_colorPicker.OnValueChangedEvent += OnColorPickerChange;
             OnColorPickerChange(hue);
 
@@ -163,8 +167,11 @@ namespace MultiplayerSFS.Mod
             if (!string.IsNullOrEmpty(message) && canSendMessage)
             {
                 AddMessage(new ChatMessage(message, ClientManager.playerId));
-                ChangeCooldownStatus(false);
-                cooldownTimer.Start();
+                if (cooldownTimer != null)
+                {
+                    ChangeCooldownStatus(false);
+                    cooldownTimer.Start();
+                }
                 ClientManager.SendPacket
                 (
                     new Packet_SendChatMessage()
@@ -259,6 +266,12 @@ namespace MultiplayerSFS.Mod
 
         public void CreateUI()
         {
+            // TODO: When the player is scrolled to the latest messages and a new message is added, the scroll should move to the latest message (which it currently doesn't).
+            // SFS.UI.ScrollElement scroll = ChatWindow.window_messages.ChildrenHolder.GetComponent<SFS.UI.ScrollElement>();
+            // bool changeScroll = scroll.PercentPosition.y <= 0.05;
+            // Debug.Log(changeScroll);
+            // Debug.Log(scroll.PercentPosition);
+
             if (ChatWindow.LastSenderId != senderId)
                 {
                     if (LocalManager.players.TryGetValue(senderId, out LocalPlayer player))
@@ -276,6 +289,12 @@ namespace MultiplayerSFS.Mod
                 }
             label_message = Builder.CreateLabel(ChatWindow.window_messages, ChatWindow.InnerWidth, 25, text: message);
             label_message.TextAlignment = TextAlignmentOptions.Left;
+
+            // if (changeScroll)
+            // {
+            //     scroll.ResetPosition();
+            // }
+            // Debug.Log(scroll.PercentPosition);
         }
 
         public void DestroyUI()
