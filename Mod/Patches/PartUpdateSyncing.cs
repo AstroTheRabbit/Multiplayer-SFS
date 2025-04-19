@@ -172,25 +172,17 @@ namespace MultiplayerSFS.Mod.Patches
             {
                 bool primed = __instance.boosterPrimed.Value;
                 float throttle = __instance.throttle_Out.Value;
-                Debug.Log("A");
                 if (ClientManager.multiplayerEnabled && GameManager.main != null && (primed != __state.primed || throttle != __state.throttle))
                 {
-                Debug.Log(__originalMethod.FullDescription());
-                Debug.Log($"{__state.primed} -> {primed}");
-                Debug.Log($"{__state.throttle} -> {throttle}");
-                Debug.Log("B");
                     Rocket rocket = __instance.GetComponentInParentTree<Rocket>();
                     int rocketId = LocalManager.GetSyncedRocketID(rocket);
 
-                Debug.Log("C");
                     if (!LocalManager.updateAuthority.Contains(rocketId))
                         return;
 
-                Debug.Log("D");
                     Part part = __instance.GetComponentInParent<Part>();
                     int partId = LocalManager.GetLocalPartID(rocketId, part);
 
-                Debug.Log("E");
                     ClientManager.SendPacket
                     (
                         new Packet_UpdatePart_BoosterModule()

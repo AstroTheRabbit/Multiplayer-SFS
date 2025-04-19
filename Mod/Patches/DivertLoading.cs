@@ -188,10 +188,7 @@ namespace MultiplayerSFS.Mod.Patches
                     }
                     else if (confirmationVisible && updateText)
                     {
-                        Debug.Log("ABSOLUTE CINEMA");
-                        Debug.Log($"0: {confirmationOpen}");
                         ScreenManager.main.CloseStack();
-                        Debug.Log($"1: {confirmationOpen}");
                         confirmationOpen = true;
                         if (players.Count > 0)
                         {
@@ -213,9 +210,7 @@ namespace MultiplayerSFS.Mod.Patches
                                     CloseMode.Current
                                 )
                             );
-                            Debug.Log($"A: {confirmationOpen}");
                             ScreenManager.main.OpenScreen(menu);
-                            Debug.Log($"B: {confirmationOpen}");
                         }
                         else
                         {
@@ -257,15 +252,10 @@ namespace MultiplayerSFS.Mod.Patches
                                     )
                                 )
                             );
-                            Debug.Log($"C: {confirmationOpen}");
                             ScreenManager.main.OpenScreen(menu);
-                            Debug.Log($"D: {confirmationOpen}");
                         }
                     }
-                    Debug.Log($"2: {confirmationOpen}");
                     await Task.Delay(500);
-                    Debug.Log("new UI!");
-                    Debug.Log($"3: {confirmationOpen}");
                 }
             }
 

@@ -443,7 +443,6 @@ namespace MultiplayerSFS.Server
 				if (player.id == packet.PlayerId)
 				{
 					player.controlledRocket = packet.RocketId;
-					Logger.Debug($"Player switch - {msg.SenderConnection.RemoteEndPoint.Address}");
 					SendPacketToAll
 					(
 						packet,
