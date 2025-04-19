@@ -1,11 +1,10 @@
 using System;
 using System.Net;
 using System.Linq;
-using System.Diagnostics;
 using System.Collections.Generic;
-using UnityEngine;
 using Lidgren.Network;
 using MultiplayerSFS.Common;
+using Color = UnityEngine.Color;
 
 namespace MultiplayerSFS.Server
 {
@@ -41,7 +40,6 @@ namespace MultiplayerSFS.Server
 			try
 			{
 				Logger.Info($"Multiplayer SFS server started, listening for connections on port {server.Port}...", true);
-				Stopwatch worldTimer = Stopwatch.StartNew();
 				
 				while (true)
 				{
@@ -49,12 +47,7 @@ namespace MultiplayerSFS.Server
                     {
                         UpdatePlayerAuthorities();
                     }
-
-                    if (connectedPlayers.Values.Any(p => p.controlledRocket >= 0))
-					{
-						world.worldTime += worldTimer.Elapsed.TotalSeconds;
-					}
-					worldTimer.Restart();
+					// world.UpdateWorldTime(connectedPlayers.Values.Any(p => p.controlledRocket >= 0));
 				}
 			}
 			catch (Exception e)
@@ -200,7 +193,7 @@ namespace MultiplayerSFS.Server
 					PlayerId = newPlayer.id,
 					UpdateRocketsPeriod = settings.updateRocketsPeriod,
 					ChatMessageCooldown = settings.chatMessageCooldown,
-					WorldTime = world.worldTime,
+					WorldTime = world.WorldTime,
 					Difficulty = world.difficulty,
 				}
 			);
@@ -291,7 +284,7 @@ namespace MultiplayerSFS.Server
 					msg.SenderConnection,
 					new Packet_UpdateWorldTime()
 					{
-						WorldTime = world.worldTime,
+						WorldTime = world.WorldTime,
 					}
 				);
 			}
@@ -321,26 +314,24 @@ namespace MultiplayerSFS.Server
                         maxCount = player.updateAuthority.Count;
                     }
 
+					// * Players controlling a rocket should always have update authority over that rocket.
+					if (player.controlledRocket == kvp.Key)
+					{
+						bestPlayer = player;
+						break;
+					}
                     if (world.rockets.TryGetValue(player.controlledRocket, out RocketState controlledRocket))
 					{
-						// * Players controlling a rocket should always have update authority over that rocket.
-						if (player.controlledRocket == kvp.Key)
-						{
-							bestPlayer = player;
-							break;
-						}
-
 						// * Players in 'load range' of a rocket should have update authority over that rocket.
 						Double2 distance = controlledRocket.location.position - kvp.Value.location.position;
 						if (distance.magnitude <= settings.loadRange)
-						{
-							// * If two or more players are in load range of a rocket, update authority should be given to the player with the lowest latency.
-							if (bestPlayer != null && bestPlayer.avgTripTime < player.avgTripTime)
-							{
-								continue;
-							}
-							bestPlayer = player;
-						}
+                        {
+                            // * If two or more players are in load range of a rocket, update authority should be given to the player with the lowest latency.
+                            if (bestPlayer == null || player.avgTripTime < bestPlayer.avgTripTime)
+                            {
+                                bestPlayer = player;
+                            }
+                        }
 
                         // * All other rockets should be distributed between players.
                         // TODO: There is likely a better way to distribute the remaining rockets which takes into account connection latency.
@@ -352,16 +343,9 @@ namespace MultiplayerSFS.Server
                     }
 
 				}
-				// TODO: There was a null ref exception coming from `UpdatePlayerAuthorities()`,
-				// TODO: but it only seems to occur in chaotic situations when lots of rockets are being destroyed,
-				// TODO: which is quite hard to debug. I'll probably see if other players report the error when I release the mod.
 				if (bestPlayer == null)
 				{
 					Logger.Error("bestPlayer is null!");
-				}
-				else if (bestPlayer.updateAuthority == null)
-				{
-					Logger.Error("bestPlayer.updateAuthority is null!");
 				}
 				bestPlayer.updateAuthority.Add(kvp.Key);
 			}
@@ -385,7 +369,7 @@ namespace MultiplayerSFS.Server
         static bool OnIncomingPacket(NetIncomingMessage msg)
         {
             PacketType packetType = (PacketType) msg.ReadByte();
-			if (packetType != PacketType.UpdateRocket)
+			if (packetType != PacketType.UpdateRocket && packetType != PacketType.UpdatePart_ResourceModule)
 				Logger.Debug($"Recieved packet of type '{packetType}'.");
 			switch (packetType)
 			{
@@ -498,16 +482,15 @@ namespace MultiplayerSFS.Server
 			Packet_CreateRocket packet = msg.Read<Packet_CreateRocket>();
 			if (world.rockets.ContainsKey(packet.GlobalId))
             {
-				Logger.Debug($"existing: {packet.Rocket.parts.Count}");
+				// Logger.Debug($"existing: {packet.Rocket.parts.Count}");
                 world.rockets[packet.GlobalId] = packet.Rocket;
             	SendPacketToAll(packet, msg.SenderConnection);
             }
             else
             {
-				Logger.Debug($"new: {packet.Rocket.parts.Count}");
+				// Logger.Debug($"new: {packet.Rocket.parts.Count}");
                 packet.GlobalId = world.rockets.InsertNew(packet.Rocket);
             	SendPacketToAll(packet);
-				// UpdatePlayerAuthorities(new KeyValuePair<int, int>(FindPlayer(msg.SenderConnection).id, packet.GlobalId));
 				if (FindPlayer(msg.SenderConnection) is ConnectedPlayer player)
 				{
 					player.updateAuthority.Add(packet.GlobalId);
@@ -529,7 +512,6 @@ namespace MultiplayerSFS.Server
 			if (world.rockets.Remove(packet.Id))
             {
                 SendPacketToAll(packet, msg.SenderConnection);
-            	// UpdatePlayerAuthorities();
             }
 		}
 
@@ -644,7 +626,7 @@ namespace MultiplayerSFS.Server
                 {
                     if (state.parts.TryGetValue(partId, out PartState partState))
                     {
-                        // TODO! A lot of these save variable names will most likely be different for non-vanilla parts, but currently idk what the best way to properly get them is.
+                        // TODO! A lot of these save variable names might be different for non-vanilla parts, but currently idk what the best way to properly get them is.
                         // TODO! I might need some form of register that associates a part's name and module variable names to their save variable names.
                         partState.part.NUMBER_VARIABLES["fuel_percent"] = packet.ResourcePercent;
 						foundPart = true;
@@ -668,13 +650,19 @@ namespace MultiplayerSFS.Server
 		public int controlledRocket;
 		public HashSet<int> updateAuthority;
 
+		static readonly Random colorRandom = new Random();
+		static Color GetRandomColor()
+		{
+			float rand = (float) Math.Round(100 * colorRandom.NextDouble());
+			return Color.HSVToRGB(rand / 100, 1, 1);
+		}
 
 		public ConnectedPlayer(string playerName)
 		{
             id = Server.connectedPlayers.Select(kvp => kvp.Value.id).ToHashSet().InsertNew();
 			username = playerName;
-			iconColor = Color.red;
-			avgTripTime = float.PositiveInfinity;
+			iconColor = GetRandomColor();
+			avgTripTime = 0;
 			controlledRocket = -1;
 			updateAuthority = new HashSet<int>();
 		}

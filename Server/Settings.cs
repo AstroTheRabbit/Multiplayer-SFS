@@ -66,8 +66,6 @@ namespace MultiplayerSFS.Server
 		public string Serialize()
 		{
 			StringBuilder result = new StringBuilder();
-
-			result.Append(string.Join("\n", ""));
 			
 			foreach (var field in GetType().GetFields())
 			{
@@ -118,10 +116,9 @@ namespace MultiplayerSFS.Server
 
 					try
 					{
-						result.GetType().GetField(key).SetValue(result,
-							Convert.ChangeType(value, result.GetType().GetField(key).FieldType,
-								CultureInfo.InvariantCulture));
-						Logger.Info(key + ": " + result.GetType().GetField(key).GetValue(result));
+                        FieldInfo field = result.GetType().GetField(key);
+						field.SetValue(result, Convert.ChangeType(value, field.FieldType, CultureInfo.InvariantCulture));
+						Logger.Info(key + ": " + field.GetValue(result));
 					}
 					catch (Exception ex)
 					{

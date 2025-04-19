@@ -8,6 +8,7 @@ using SFS.UI;
 using SFS.World;
 using SFS.Parts;
 using MultiplayerSFS.Common;
+using SFS.Variables;
 
 namespace MultiplayerSFS.Mod.Patches
 {
@@ -289,6 +290,61 @@ namespace MultiplayerSFS.Mod.Patches
                     else
                     {
                         Debug.LogError("Missing local rocket when trying to send staging update!");
+                    }
+                }
+            }
+        }
+
+        [HarmonyPatch(typeof(WorldTime), "Update")]
+        public static class WorldTime_Update
+        {
+            public static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions, ILGenerator generator)
+            {
+                Label label_multiplayerStart = generator.DefineLabel();
+                Label label_multiplayerEnd = generator.DefineLabel();
+
+                bool found_ldarg = false;
+                bool found_stfld = false;
+
+                foreach (CodeInstruction code in instructions)
+                {
+                    if (found_ldarg && code.opcode == OpCodes.Ldarg_0)
+                    {
+                        yield return code.WithLabels(label_multiplayerStart);
+                        found_ldarg = false;
+                    }
+                    else if (found_stfld && code.opcode == OpCodes.Ldarg_0)
+                    {
+                        yield return code.WithLabels(label_multiplayerEnd);
+                        found_stfld = false;
+                    }
+                    else
+                    {
+                        yield return code;
+                    }
+                    if (code.opcode == OpCodes.Stloc_0)
+                    {
+                        // * Load `ClientManager.multiplayerEnabled.Value`.
+                        yield return new CodeInstruction(OpCodes.Ldsfld, AccessTools.Field(typeof(ClientManager), nameof(ClientManager.multiplayerEnabled)));
+                        yield return new CodeInstruction(OpCodes.Callvirt, AccessTools.PropertyGetter(typeof(Obs<bool>), nameof(Obs<bool>.Value)));
+                        // * Branch to vanilla code if multiplayer isn't enabled.
+                        yield return new CodeInstruction(OpCodes.Brfalse, label_multiplayerStart);
+                        // * Load `ClientManager.world.WorldTime`.
+                        yield return new CodeInstruction(OpCodes.Ldsfld, AccessTools.Field(typeof(ClientManager), nameof(ClientManager.world)));
+                        yield return new CodeInstruction(OpCodes.Callvirt, AccessTools.PropertyGetter(typeof(WorldState), nameof(WorldState.WorldTime)));
+                        yield return new CodeInstruction(OpCodes.Stloc_1);
+                        // * Store `ClientManager.world.WorldTime` in `WorldTime.worldTime`.
+                        yield return new CodeInstruction(OpCodes.Ldarg_0);
+                        yield return new CodeInstruction(OpCodes.Ldloc_1);
+                        yield return new CodeInstruction(OpCodes.Stfld, AccessTools.Field(typeof(WorldTime), nameof(WorldTime.worldTime)));
+                        // * Branch to remaining vanilla code.
+                        yield return new CodeInstruction(OpCodes.Br, label_multiplayerEnd);
+                        found_ldarg = true;
+
+                    }
+                    if (code.opcode == OpCodes.Stfld)
+                    {
+                        found_stfld = true;
                     }
                 }
             }

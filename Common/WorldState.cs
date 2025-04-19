@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.Diagnostics;
 using System.Collections.Generic;
 using Lidgren.Network;
 using UnityEngine;
@@ -41,13 +42,33 @@ namespace MultiplayerSFS.Common
 
     public class WorldState
     {
-        public double worldTime;
+        public double initWorldTime;
+        public Stopwatch worldTimer = Stopwatch.StartNew();
+        public double WorldTime
+        {
+            get
+            {
+                if (worldTimer.ElapsedTicks > 1000 * Stopwatch.Frequency)
+                {
+                    // * Safety measure to prevent floating-point precision errors server-side.
+                    initWorldTime += worldTimer.Elapsed.TotalSeconds;
+                    worldTimer.Restart();
+                }
+                return initWorldTime + worldTimer.Elapsed.TotalSeconds;
+            }
+            set
+            {
+                initWorldTime = value;
+                worldTimer.Restart();
+            }
+        }
+
         public Difficulty.DifficultyType difficulty;
         public Dictionary<int, RocketState> rockets;
 
         public WorldState()
         {
-            worldTime = 1000000.0;
+            initWorldTime = 1000000.0;
             difficulty = Difficulty.DifficultyType.Normal;
             rockets = new Dictionary<int, RocketState>();
         }
@@ -70,7 +91,7 @@ namespace MultiplayerSFS.Common
             if (!JsonWrapper.TryLoadJson(persistent.ExtendToFile("Rockets.txt"), out List<RocketSave> rocketSaves))
                 throw new Exception("'Rockets.txt' file cannot be found or could not be loaded.");
 
-            worldTime = state.worldTime;
+            initWorldTime = state.worldTime;
             difficulty = settings.difficulty.difficulty;
             rockets = new Dictionary<int, RocketState>();
             foreach (RocketSave save in rocketSaves)

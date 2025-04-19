@@ -4,12 +4,12 @@ namespace MultiplayerSFS.Server
 {
     public static class Logger
     {
-        static string Date() => DateTime.Now.ToString();
+        static string Date => DateTime.Now.ToString();
 
         public static void Debug(object obj)
         {
             Console.ForegroundColor = ConsoleColor.Magenta;
-            Console.WriteLine("[{0}] [DEBUG]: {1}", Date(), obj);
+            Console.WriteLine("[{0}] [DEBUG]: {1}", Date, obj);
             Console.ResetColor();
         }
         
@@ -17,34 +17,29 @@ namespace MultiplayerSFS.Server
         {
             if (important)
                 Console.ForegroundColor = ConsoleColor.Green;
-            Console.WriteLine("[{0}] [INFO]: {1}", Date(), msg);
+            Console.WriteLine("[{0}] [INFO]: {1}", Date, msg);
             Console.ResetColor();
         }
 
         public static void Warning(string msg)
         {
             Console.ForegroundColor = ConsoleColor.Yellow;
-            Console.WriteLine("[{0}] [WARN]: {1}", Date(), msg);
+            Console.WriteLine("[{0}] [WARN]: {1}", Date, msg);
             Console.ResetColor();
         }
 
         public static void Error(string message)
         {
             Console.ForegroundColor = ConsoleColor.Red;
-            Console.WriteLine("[{0}] [ERROR]: {1}", Date(), message);
+            Console.WriteLine("[{0}] [ERROR]: {1}", Date, message);
             Console.ResetColor();
         }
 
         public static void Error(Exception exception)
         {
             Console.ForegroundColor = ConsoleColor.Red;
-            Console.WriteLine("[{0}] [ERROR]: {1}", Date(), exception);
+            Console.WriteLine("[{0}] [ERROR]: {1}", Date, exception);
             Console.ResetColor();
-        }
-
-        public static string ToBitString(this byte b)
-        {
-            return Convert.ToString(b, 2).PadLeft(8, '0');
         }
     }
 }

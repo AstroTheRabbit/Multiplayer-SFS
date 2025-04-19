@@ -12,6 +12,8 @@ using SFS.Parts.Modules;
 using ModLoader.Helpers;
 using MultiplayerSFS.Common;
 using Object = UnityEngine.Object;
+using SFS.World.Drag;
+using System.Reflection;
 
 namespace MultiplayerSFS.Mod
 {
@@ -314,7 +316,7 @@ namespace MultiplayerSFS.Mod
             {
                 LocalRocket synced = SpawnLocalRocket(packet.Rocket);
                 syncedRockets.Add(packet.GlobalId, synced);
-                if (Player.currentRocket == packet.GlobalId)
+                if (Player.controlledRocket == packet.GlobalId)
                 {
                     // * Complete resync was sent for this client's rocket.
                     PlayerController.main.player.Value = synced.rocket;
@@ -347,25 +349,45 @@ namespace MultiplayerSFS.Mod
                 {
                     const int interpolationSteps = 50;
                     double dt = delta / interpolationSteps;
+                    double dragCoefficient = GetDragCoefficent();
+
+                    double GetDragCoefficent()
+                    {
+                        float angle = (float) (packet.Location.velocity.AngleRadians - (Mathf.PI / 2));
+                        List<Surface> exposedSurfaces = AeroModule.GetExposedSurfaces(Aero_Rocket.GetDragSurfaces(rocket.rocket.partHolder, Matrix2x2.Angle(-angle)));
+                        MethodInfo method = AccessTools.Method(typeof(AeroModule), "CalculateDragForce");
+                        (float coefficent, Vector2 _) = ((float, Vector2)) method.Invoke(null, new [] { exposedSurfaces });
+                        return 1.5f * coefficent / rocket.rocket.mass.GetMass();
+                    }
+
+                    Double2 GetAcceleration(Double2 _pos, Double2 _vel)
+                    {
+                        float atmoDensity = (float) loc.planet.GetAtmosphericDensity(_pos.magnitude - loc.planet.Radius);
+                        Double2 drag = dragCoefficient * _vel.sqrMagnitude * atmoDensity * -_vel.normalized;
+                        Double2 gravity = loc.planet.GetGravity(_pos);
+                        return gravity + drag;
+                    }
 
                     Double2 pos = loc.position;
                     Double2 vel = loc.velocity;
-                    Double2 acc = loc.planet.GetGravity(pos);
+                    Double2 acc = GetAcceleration(pos, vel);
 
                     for (int i = 0; i < interpolationSteps; i++)
                     {
                         Double2 newPos = pos + (vel * dt) + (0.5 * acc * dt * dt);
-                        Double2 newAcc = loc.planet.GetGravity(newPos);
+                        Double2 newAcc = GetAcceleration(newPos, vel);
                         Double2 newVel = vel + (acc + newAcc) * (0.5 * dt);
 
                         pos = newPos;
                         vel = newVel;
                         acc = newAcc;
                     }
-                    loc = new Location(loc.planet, pos, vel);
+                    loc.position = pos;
+                    loc.velocity = vel;
                 }
                 rocket.rocket.physics.SetLocationAndState(loc, rocket.rocket.physics.PhysicsMode);
             }
+
         }
 
         public static void DestroyLocalPart(Packet_DestroyPart packet)
@@ -463,7 +485,7 @@ namespace MultiplayerSFS.Mod
         /// <summary>
         /// Id of the rocket currently controlled by this player, or -1 if they currently aren't controlling a rocket.
         /// </summary>
-        public Int_Local currentRocket;
+        public Int_Local controlledRocket;
 
         /// <summary>
         /// Color used to distinguish this player from other rockets in map view. Also used to color their username in the chat window.
@@ -473,8 +495,8 @@ namespace MultiplayerSFS.Mod
         public LocalPlayer(string username, Color color)
         {
             this.username = username;
-            currentRocket = new Int_Local() { Value = -1 };
-            currentRocket.OnChange += OnControlledRocketChange;
+            controlledRocket = new Int_Local() { Value = -1 };
+            controlledRocket.OnChange += OnControlledRocketChange;
             iconColor = color;
         }
 

@@ -46,8 +46,8 @@ namespace MultiplayerSFS.Mod.Patches
 
                     foreach (KeyValuePair<int, LocalPlayer> kvp in LocalManager.players)
                     {
-                        controlled_a |= kvp.Value.currentRocket == id_a;
-                        controlled_b |= kvp.Value.currentRocket == id_b;
+                        controlled_a |= kvp.Value.controlledRocket == id_a;
+                        controlled_b |= kvp.Value.controlledRocket == id_b;
 
                         if (controlled_a && controlled_b)
                         {

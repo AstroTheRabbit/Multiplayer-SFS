@@ -71,7 +71,7 @@ namespace MultiplayerSFS.Mod.Patches
                     // // Branches, challenges, logs
                     // TODO: Fix up errors related to branches, etc
                     
-                    WorldTime.main.worldTime = ClientManager.world.worldTime;
+                    WorldTime.main.worldTime = ClientManager.world.WorldTime;
                     WorldTime.main.SetTimewarpIndex_ForLoad(0);
                     WorldView.main.SetViewLocation(Base.planetLoader.spaceCenter.LaunchPadLocation);
                     WorldView.main.viewDistance.Value = 32f;
@@ -281,7 +281,7 @@ namespace MultiplayerSFS.Mod.Patches
                         newRockets.Add(rocket.Key);
                         foreach (KeyValuePair<int, LocalPlayer> player in LocalManager.players)
                         {
-                            if (player.Value.currentRocket == rocket.Key)
+                            if (player.Value.controlledRocket == rocket.Key)
                             {
                                 newPlayers.Add(player.Key);
                             }

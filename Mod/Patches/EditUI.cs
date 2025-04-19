@@ -88,16 +88,27 @@ namespace MultiplayerSFS.Mod.Patches
                         ElementGenerator.VerticalSpace(10),
                         ElementGenerator.DefaultHorizontalGroup(ButtonBuilder.CreateIconButton(carrier, buttonIcons.save, () => Loc.main.Save_Blueprint, __instance.OpenSaveMenu, CloseMode.None), ButtonBuilder.CreateIconButton(carrier, buttonIcons.load, () => Loc.main.Load_Blueprint, __instance.OpenLoadMenu, CloseMode.None)),
                         ElementGenerator.VerticalSpace(10),
-                        ElementGenerator.DefaultHorizontalGroup(ButtonBuilder.CreateIconButton(carrier, buttonIcons.moveRocket, () => Loc.main.Move_Rocket_Button, MoveRocket, CloseMode.Current), ButtonBuilder.CreateIconButton(carrier, buttonIcons.clear, () => Loc.main.Clear_Confirm, __instance.AskClear, CloseMode.Current)),
-                        // // Example rockets and video tutorials
-                        ElementGenerator.VerticalSpace(10),
-                        ButtonBuilder.CreateIconButton(carrier2, buttonIcons.shareRocket, () => Loc.main.Share_Button, __instance.UploadPC, CloseMode.Current),
-                        // // Cheats
-                        ButtonBuilder.CreateIconButton(carrier2, buttonIcons.settings, () => Loc.main.Open_Settings_Button, Menu.settings.Open, CloseMode.None),
-                        ElementGenerator.VerticalSpace(10),
-                        // // Resume game
-                        ButtonBuilder.CreateIconButton(carrier2, buttonIcons.exit, () => Loc.main.Exit_To_Space_Center, ExitToHub, CloseMode.None)
+                        ElementGenerator.DefaultHorizontalGroup(ButtonBuilder.CreateIconButton(carrier, buttonIcons.moveRocket, () => Loc.main.Move_Rocket_Button, MoveRocket, CloseMode.Current), ButtonBuilder.CreateIconButton(carrier, buttonIcons.clear, () => Loc.main.Clear_Confirm, __instance.AskClear, CloseMode.Current))
                     };
+                    if (RemoteSettings.GetBool("Example_Rockets", defaultValue: true) || RemoteSettings.GetBool("Video_Tutorials", defaultValue: true))
+                    {
+                        list.Add(ElementGenerator.VerticalSpace(25));
+                    }
+                    if (RemoteSettings.GetBool("Example_Rockets", defaultValue: true))
+                    {
+                        list.Add(ButtonBuilder.CreateIconButton(carrier2, buttonIcons.exampleRockets, () => Loc.main.Example_Rockets_OpenMenu, OpenExampleRocketsMenu, CloseMode.None));
+                    }
+                    if (RemoteSettings.GetBool("Video_Tutorials", defaultValue: true))
+                    {
+                        list.Add(ButtonBuilder.CreateIconButton(carrier2, buttonIcons.videoTutorials, () => Loc.main.Video_Tutorials_OpenButton, HomeManager.OpenTutorials_Static, CloseMode.None));
+                    }
+                    list.Add(ElementGenerator.VerticalSpace(10));
+                    list.Add(ButtonBuilder.CreateIconButton(carrier2, buttonIcons.shareRocket, () => Loc.main.Share_Button, __instance.UploadPC, CloseMode.Current));
+                    // // Cheats
+                    list.Add(ButtonBuilder.CreateIconButton(carrier2, buttonIcons.settings, () => Loc.main.Open_Settings_Button, Menu.settings.Open, CloseMode.None));
+                    list.Add(ElementGenerator.VerticalSpace(10));
+                    // // Resume game
+                    list.Add(ButtonBuilder.CreateIconButton(carrier2, buttonIcons.exit, () => Loc.main.Exit_To_Space_Center, ExitToHub, CloseMode.None));
                     MenuGenerator.OpenMenu(CancelButton.Close, CloseMode.Current, list.ToArray());
 
                     void ExitToHub()
@@ -109,6 +120,11 @@ namespace MultiplayerSFS.Mod.Patches
                     void MoveRocket()
                     {
                         __instance.selector.Select(__instance.buildGrid.activeGrid.partsHolder.GetArray());
+                    }
+
+                    void OpenExampleRocketsMenu()
+                    {
+                        AccessTools.Method(typeof(BuildManager), "OpenExampleRocketsMenu").Invoke(__instance, null);
                     }
 
                     return false;
@@ -158,7 +174,7 @@ namespace MultiplayerSFS.Mod.Patches
                     int id = LocalManager.GetSyncedRocketID(rocket);
                     foreach (LocalPlayer player in LocalManager.players.Values)
                     {
-                        if (player.currentRocket == id)
+                        if (player.controlledRocket == id)
                         {
                             SpriteRenderer renderer = __instance.mapIcon.GetComponentInChildren<SpriteRenderer>();
                             renderer.color = new Color

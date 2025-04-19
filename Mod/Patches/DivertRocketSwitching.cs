@@ -26,13 +26,13 @@ namespace MultiplayerSFS.Mod.Patches
                     int id = LocalManager.GetSyncedRocketID(rocket);
                     if (id >= 0)
                     {
-                        if (LocalManager.players.Any(kvp => kvp.Key != ClientManager.playerId && kvp.Value.currentRocket == id))
+                        if (LocalManager.players.Any(kvp => kvp.Key != ClientManager.playerId && kvp.Value.controlledRocket == id))
                         {
                             // * `player` is already controlled by another player.
                             return false;
                         }
                         
-                        LocalManager.Player.currentRocket.Value = id;
+                        LocalManager.Player.controlledRocket.Value = id;
                         ClientManager.SendPacket
                         (
                             new Packet_UpdatePlayerControl()

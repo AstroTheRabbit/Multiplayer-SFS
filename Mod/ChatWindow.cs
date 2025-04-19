@@ -241,7 +241,7 @@ namespace MultiplayerSFS.Mod
             }
             if (LocalManager.players.TryGetValue(id, out LocalPlayer player))
             {
-                if (LocalManager.syncedRockets.TryGetValue(player.currentRocket, out LocalRocket rocket) && rocket.rocket != null)
+                if (LocalManager.syncedRockets.TryGetValue(player.controlledRocket, out LocalRocket rocket) && rocket.rocket != null)
                 {
                     // * Updates the rocket's map icon color manually.
                     new Traverse(rocket.rocket.mapIcon).Method("UpdateAlpha").GetValue();

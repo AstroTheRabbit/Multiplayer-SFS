@@ -4,7 +4,6 @@ using HarmonyLib;
 using UnityEngine;
 using SFS.IO;
 using SFS.UI;
-using SFS.World;
 using SFS.Audio;
 using SFS.Translations;
 using ModLoader.Helpers;
@@ -53,7 +52,7 @@ namespace MultiplayerSFS.Mod
                 if (ClientManager.multiplayerEnabled)
                 {
                     // * Send `UpdateControl` packet when the player leaves the world scene in multiplayer.
-                    LocalManager.Player.currentRocket.Value = -1;
+                    LocalManager.Player.controlledRocket.Value = -1;
                     ClientManager.SendPacket
                     (
                         new Packet_UpdatePlayerControl()

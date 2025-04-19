@@ -117,9 +117,9 @@ namespace MultiplayerSFS.Mod
 
             ChatWindow.CreateCooldownTimer(response.ChatMessageCooldown);
             
-            world = new WorldState
+            world = new WorldState()
             {
-                worldTime = response.WorldTime,
+                initWorldTime = response.WorldTime,
                 difficulty = response.Difficulty,
             };
 
@@ -303,7 +303,7 @@ namespace MultiplayerSFS.Mod
             Packet_UpdatePlayerControl packet = msg.Read<Packet_UpdatePlayerControl>();
             if (LocalManager.players.TryGetValue(packet.PlayerId, out LocalPlayer player))
             {
-                player.currentRocket.Value = packet.RocketId;
+                player.controlledRocket.Value = packet.RocketId;
             }
             else
             {
@@ -322,7 +322,8 @@ namespace MultiplayerSFS.Mod
             Packet_UpdateWorldTime packet = msg.Read<Packet_UpdateWorldTime>();
             if (WorldTime.main != null)
             {
-                WorldTime.main.worldTime = packet.WorldTime;
+                world.WorldTime = packet.WorldTime;
+                WorldTime.main.worldTime = world.WorldTime;
             }
         }
         
