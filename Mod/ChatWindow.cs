@@ -22,6 +22,7 @@ namespace MultiplayerSFS.Mod
         internal const int WindowWidth = 500;
         internal const int WindowHeight = 700;
         internal const int InnerWidth = WindowWidth - 20;
+        internal const int MessageWidth = InnerWidth - 10;
 
         public static GameObject holder_window;
         public static ClosableWindow window;
@@ -276,19 +277,23 @@ namespace MultiplayerSFS.Mod
                 {
                     if (LocalManager.players.TryGetValue(senderId, out LocalPlayer player))
                     {
-                        label_playerName = Builder.CreateLabel(ChatWindow.window_messages, ChatWindow.InnerWidth, 30, text: player.username);
+                        label_playerName = Builder.CreateLabel(ChatWindow.window_messages, ChatWindow.MessageWidth, 30, text: player.username);
                         label_playerName.TextAlignment = TextAlignmentOptions.Left;
                         label_playerName.Color = player.iconColor;
                     }
                     else
                     {
-                        label_playerName = Builder.CreateLabel(ChatWindow.window_messages, ChatWindow.InnerWidth, 30, text: "SERVER");
+                        label_playerName = Builder.CreateLabel(ChatWindow.window_messages, ChatWindow.MessageWidth, 30, text: "SERVER");
                         label_playerName.TextAlignment = TextAlignmentOptions.Left;
                         label_playerName.FontStyle = FontStyles.Bold;
                     }
                 }
-            label_message = Builder.CreateLabel(ChatWindow.window_messages, ChatWindow.InnerWidth, 25, text: message);
-            label_message.TextAlignment = TextAlignmentOptions.Left;
+            label_message = Builder.CreateLabel(ChatWindow.window_messages, ChatWindow.MessageWidth, 25, text: message);
+            TextMeshProUGUI textAdapter = label_message.FieldRef<TextMeshProUGUI>("textAdapter");
+            textAdapter.enableWordWrapping = true;
+            label_message.AutoFontResize = false;
+            label_message.TextAlignment = TextAlignmentOptions.TopLeft;
+            label_message.Size = new Vector2(label_message.Size.x, textAdapter.preferredHeight);
 
             // if (changeScroll)
             // {

@@ -18,7 +18,7 @@ namespace MultiplayerSFS.Mod
         public static FolderPath buildPersistentFolder;
         public override string ModNameID => "multiplayersfs";
         public override string DisplayName => "SFS Multiplayer";
-        public override string Author => "Astro The Rabbit, VerdiX094";
+        public override string Author => "Astro The Rabbit";
         public override string MinimumGameVersionNecessary => "1.5.10.2";
         public override string ModVersion => "1.0";
         public override string Description => "Adds server-client multiplayer to SFS!";

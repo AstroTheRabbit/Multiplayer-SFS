@@ -327,7 +327,6 @@ namespace MultiplayerSFS.Common
         public List<int> partIDs;
 
         public StageState() {}
-
         public StageState(int stageID, List<int> partIDs)
         {
             this.stageID = stageID;
@@ -337,8 +336,7 @@ namespace MultiplayerSFS.Common
         public StageState(StageSave save, Dictionary<int, int> partIndexToID)
         {
             stageID = save.stageId;
-            IEnumerable<int> unfiltered = save.partIndexes.Select(idx => partIndexToID[idx]);
-            partIDs = unfiltered.ToList();
+            partIDs = save.partIndexes.Select(idx => partIndexToID[idx]).ToList();
         }
 
         public void Serialize(NetOutgoingMessage msg)

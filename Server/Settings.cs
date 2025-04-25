@@ -32,7 +32,14 @@ namespace MultiplayerSFS.Server
 			"Password required by players to access the multiplayer server.", 
 			"WARNING: Leaving blank can & will allow any player who knows the server's IP address to join!"
 		)]
-		public string password = "";
+		public string serverPassword = "";
+
+		[ServerConfigVariable(
+			"Password used by a player to gain admin privileges, which allows the use of various powerful commands through the in-game multiplayer chat.",
+			"Leaving this blank will prevent the use of admin privileges by any connected player.",
+			"WARNING: These commands include the ability to destroy any & all rockets, kick any player, and more, so be careful with sharing this password!"
+		)]
+		public string adminPassword = "ADMIN123"; // ! TEST VALUE
 
 		[ServerConfigVariable(
 			"The maximum number of connected players allowed at any one time."

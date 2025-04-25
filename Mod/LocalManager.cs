@@ -12,8 +12,6 @@ using SFS.Parts.Modules;
 using ModLoader.Helpers;
 using MultiplayerSFS.Common;
 using Object = UnityEngine.Object;
-using SFS.World.Drag;
-using System.Reflection;
 
 namespace MultiplayerSFS.Mod
 {
@@ -52,7 +50,7 @@ namespace MultiplayerSFS.Mod
         /// <summary>
         /// Local id of the rocket that this player will switch to after it has been synced with the server.
         /// </summary>
-        public static int unsyncedToControl;
+        public static int unsyncedToControl = -1;
 
         /// <summary>
         /// A custom `DestructionReason` used to indicate that a part or rocket's destruction was requested by the multiplayer mod (usually as a result of a packet from the server).
@@ -129,7 +127,7 @@ namespace MultiplayerSFS.Mod
                         ThrottleOn = rocket.throttle.throttleOn,
                         RCS = rocket.arrowkeys.rcs,
                         Location = new WorldSave.LocationData(rocket.location.Value),
-                        WorldTime = WorldTime.main.worldTime,
+                        WorldTime = ClientManager.world.WorldTime,
                     };
                     if (ClientManager.world.rockets.TryGetValue(id, out RocketState state))
                     {
@@ -235,7 +233,7 @@ namespace MultiplayerSFS.Mod
             {
                 if (joint.id_A == -1 || joint.id_B == -1)
                 {
-                    // TODO! This is a temporary fix for an error caused by split modules (afaik).
+                    // TODO: This is a temporary fix for an error caused by split modules (afaik).
                     continue;
                 }
                 Part part_A = parts[joint.id_A];
@@ -340,50 +338,12 @@ namespace MultiplayerSFS.Mod
                 rocket.rocket.throttle.throttlePercent.Value = packet.ThrottlePercent;
                 rocket.rocket.throttle.throttleOn.Value = packet.ThrottleOn;
 
-                // TODO! Interpolation to prevent jitter (especially when moving at high speeds like orbit).
-                Location loc = packet.Location.GetSaveLocation(WorldTime.main.worldTime);
-                double delta = loc.time - packet.WorldTime;
-                Debug.Log(delta);
-
-                if (loc.TerrainHeight > 50)
+                // TODO! Extrapolation and/or interpolation to prevent jitter (especially when moving at high speeds like orbit).
+                Location loc = packet.Location.GetSaveLocation(packet.WorldTime);
+                if (loc.TerrainHeight > 50 && rocket.rocket.physics.PhysicsMode)
                 {
-                    const int interpolationSteps = 50;
-                    double dt = delta / interpolationSteps;
-                    double dragCoefficient = GetDragCoefficent();
-
-                    double GetDragCoefficent()
-                    {
-                        float angle = (float) (packet.Location.velocity.AngleRadians - (Mathf.PI / 2));
-                        List<Surface> exposedSurfaces = AeroModule.GetExposedSurfaces(Aero_Rocket.GetDragSurfaces(rocket.rocket.partHolder, Matrix2x2.Angle(-angle)));
-                        MethodInfo method = AccessTools.Method(typeof(AeroModule), "CalculateDragForce");
-                        (float coefficent, Vector2 _) = ((float, Vector2)) method.Invoke(null, new [] { exposedSurfaces });
-                        return 1.5f * coefficent / rocket.rocket.mass.GetMass();
-                    }
-
-                    Double2 GetAcceleration(Double2 _pos, Double2 _vel)
-                    {
-                        float atmoDensity = (float) loc.planet.GetAtmosphericDensity(_pos.magnitude - loc.planet.Radius);
-                        Double2 drag = dragCoefficient * _vel.sqrMagnitude * atmoDensity * -_vel.normalized;
-                        Double2 gravity = loc.planet.GetGravity(_pos);
-                        return gravity + drag;
-                    }
-
-                    Double2 pos = loc.position;
-                    Double2 vel = loc.velocity;
-                    Double2 acc = GetAcceleration(pos, vel);
-
-                    for (int i = 0; i < interpolationSteps; i++)
-                    {
-                        Double2 newPos = pos + (vel * dt) + (0.5 * acc * dt * dt);
-                        Double2 newAcc = GetAcceleration(newPos, vel);
-                        Double2 newVel = vel + (acc + newAcc) * (0.5 * dt);
-
-                        pos = newPos;
-                        vel = newVel;
-                        acc = newAcc;
-                    }
-                    loc.position = pos;
-                    loc.velocity = vel;
+                    // * Limit extrapolation to rockets in physics mode which are above the ground.
+                    loc = Extrapolation.Extrapolate(rocket.rocket, loc);
                 }
                 rocket.rocket.physics.SetLocationAndState(loc, rocket.rocket.physics.PhysicsMode);
             }
@@ -503,7 +463,6 @@ namespace MultiplayerSFS.Mod
         public void OnControlledRocketChange(int oldId, int newId)
         {
             // TODO: Name tags above controlled rockets.
-            // TODO: Colored icons in map view.
         }
     }
 }

@@ -99,7 +99,7 @@ namespace MultiplayerSFS.Server
 			return requiresRefresh;
 		}
 
-		static ConnectedPlayer FindPlayer(NetConnection connection)
+		public static ConnectedPlayer FindPlayer(NetConnection connection)
 		{
 			if (connectedPlayers.TryGetValue(connection.RemoteEndPoint, out ConnectedPlayer res))
 				return res;
@@ -111,7 +111,7 @@ namespace MultiplayerSFS.Server
             return string.IsNullOrWhiteSpace(username) ? "???" : $"'{username}'";
         }
 
-		static void SendPacketToPlayer(NetConnection connection, Packet packet, NetDeliveryMethod method = NetDeliveryMethod.ReliableOrdered)
+		public static void SendPacketToPlayer(NetConnection connection, Packet packet, NetDeliveryMethod method = NetDeliveryMethod.ReliableOrdered)
 		{
 			// Logger.Debug($"Sending packet of type '{packet.Type}'.");
 			NetOutgoingMessage msg = server.CreateMessage();
@@ -120,7 +120,7 @@ namespace MultiplayerSFS.Server
 			server.SendMessage(msg, connection, method);
 		}
 
-		static void SendPacketToAll(Packet packet, NetConnection except = null, NetDeliveryMethod method = NetDeliveryMethod.ReliableOrdered)
+		public static void SendPacketToAll(Packet packet, NetConnection except = null, NetDeliveryMethod method = NetDeliveryMethod.ReliableOrdered)
 		{
 			// Logger.Debug($"Sending packet of type '{packet.Type}' to all.");
 			NetOutgoingMessage msg = server.CreateMessage();
@@ -174,7 +174,7 @@ namespace MultiplayerSFS.Server
 				reason = $"Username '{request.Username}' is already in use";
 				goto ConnectionDenied;
 			}
-			if (request.Password != settings.password && settings.password != "")
+			if (request.Password != settings.serverPassword && settings.serverPassword != "")
 			{
 				reason = $"Invalid password";
 				goto ConnectionDenied;
@@ -220,6 +220,7 @@ namespace MultiplayerSFS.Server
 				{
 					Id = player.id,
 					Username = player.username,
+					IconColor = player.iconColor,
 					PrintMessage = true,
 				},
 				connection
@@ -263,7 +264,7 @@ namespace MultiplayerSFS.Server
 
 		static void OnPlayerDisconnect(NetConnection connection)
         {
-			ConnectedPlayer player = FindPlayer(connection);
+            ConnectedPlayer player = FindPlayer(connection);
             if (player != null)
 			{
 				SendPacketToAll(new Packet_PlayerDisconnected() { Id = player.id });
@@ -279,12 +280,13 @@ namespace MultiplayerSFS.Server
 				player.avgTripTime = msg.SenderConnection.AverageRoundtripTime;
 				Logger.Info($"Average roundtrip time updated for {username} @ {msg.SenderEndPoint} - {1000 * player.avgTripTime}ms.");
 
+				// Logger.Debug($"{msg.SenderConnection.RemoteTimeOffset} : {msg.SenderConnection.AverageRoundtripTime} : {msg.SenderConnection.AverageRoundtripTime / 2}");
 				SendPacketToPlayer
 				(
 					msg.SenderConnection,
 					new Packet_UpdateWorldTime()
 					{
-						WorldTime = world.WorldTime,
+						WorldTime = world.WorldTime + (player.avgTripTime / 2),
 					}
 				);
 			}
@@ -473,7 +475,22 @@ namespace MultiplayerSFS.Server
 		static void OnPacket_SendChatMessage(NetIncomingMessage msg)
         {
             Packet_SendChatMessage packet = msg.Read<Packet_SendChatMessage>();
-			SendPacketToAll(packet, msg.SenderConnection);
+			if (CommandManager.TryParse(packet.Message, out string name, out string[] args))
+			{
+				string message = CommandManager.TryRun(name, args, msg.SenderConnection);
+				SendPacketToPlayer
+				(
+					msg.SenderConnection,
+					new Packet_SendChatMessage()
+					{
+						Message = message,
+					}
+				);
+			}
+			else
+			{
+				SendPacketToAll(packet, msg.SenderConnection);
+			}
         }
 
 		static void OnPacket_CreateRocket(NetIncomingMessage msg)
@@ -642,6 +659,7 @@ namespace MultiplayerSFS.Server
 	public class ConnectedPlayer
 	{
 		public int id;
+		public bool isAdmin;
 		public string username;
 		public Color iconColor;
 		public float avgTripTime;
@@ -659,6 +677,7 @@ namespace MultiplayerSFS.Server
 		public ConnectedPlayer(string playerName)
 		{
             id = Server.connectedPlayers.Select(kvp => kvp.Value.id).ToHashSet().InsertNew();
+			isAdmin = false;
 			username = playerName;
 			iconColor = GetRandomColor();
 			avgTripTime = 0;
