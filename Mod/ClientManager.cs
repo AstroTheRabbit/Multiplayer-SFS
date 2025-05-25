@@ -7,11 +7,9 @@ using UnityEngine;
 using Lidgren.Network;
 using SFS;
 using SFS.UI;
-using SFS.Parts;
 using SFS.World;
 using SFS.Variables;
 using SFS.WorldBase;
-using SFS.Parts.Modules;
 using MultiplayerSFS.Common;
 
 namespace MultiplayerSFS.Mod
@@ -187,7 +185,7 @@ namespace MultiplayerSFS.Mod
         public static void HandlePacket(NetIncomingMessage msg)
         {
             PacketType packetType = (PacketType) msg.ReadByte();
-            if (packetType != PacketType.UpdateRocket)
+            if (Packet.ShouldDebug(packetType))
                 Debug.Log($"Recieved packet of type {packetType}.");
             switch (packetType)
             {
@@ -221,8 +219,11 @@ namespace MultiplayerSFS.Mod
                 case PacketType.DestroyRocket:
                     OnPacket_DestroyRocket(msg);
                     break;
-                case PacketType.UpdateRocket:
-                    OnPacket_UpdateRocket(msg);
+                case PacketType.UpdateRocketPrimary:
+                    OnPacket_UpdateRocketPrimary(msg);
+                    break;
+                case PacketType.UpdateRocketSecondary:
+                    OnPacket_UpdateRocketSecondary(msg);
                     break;
 
                 // * Part & Staging Packets
@@ -266,8 +267,9 @@ namespace MultiplayerSFS.Mod
 
         public static void SendPacket(Packet packet, NetDeliveryMethod method = NetDeliveryMethod.ReliableOrdered)
         {
-            if (packet.Type != PacketType.UpdateRocket)
+            if (Packet.ShouldDebug(packet.Type))
                 Debug.Log($"Sending packet of type {packet.Type}.");
+
             NetOutgoingMessage msg = client.CreateMessage();
             msg.Write((byte) packet.Type);
             msg.Write(packet);
@@ -277,7 +279,7 @@ namespace MultiplayerSFS.Mod
         static void OnPacket_PlayerConnected(NetIncomingMessage msg)
         {
             Packet_PlayerConnected packet = msg.Read<Packet_PlayerConnected>();
-            LocalManager.players.Add(packet.Id, new LocalPlayer(packet.Username, packet.IconColor));
+            LocalManager.players.Add(packet.PlayerId, new LocalPlayer(packet.Username, packet.IconColor));
             if (packet.PrintMessage)
             {
                 string message = $"{packet.Username} connected";
@@ -289,12 +291,12 @@ namespace MultiplayerSFS.Mod
         static void OnPacket_PlayerDisconnected(NetIncomingMessage msg)
         {
             Packet_PlayerDisconnected packet = msg.Read<Packet_PlayerDisconnected>();
-            if (LocalManager.players.TryGetValue(packet.Id, out LocalPlayer player))
+            if (LocalManager.players.TryGetValue(packet.PlayerId, out LocalPlayer player))
             {
                 string message = $"{player.username} disconnected";
                 MsgDrawer.main.Log(message);
                 ChatWindow.AddMessage(new ChatMessage(message));
-                LocalManager.players.Remove(packet.Id);
+                LocalManager.players.Remove(packet.PlayerId);
             }
         }
 
@@ -315,6 +317,14 @@ namespace MultiplayerSFS.Mod
         {
             Packet_UpdatePlayerAuthority packet = msg.Read<Packet_UpdatePlayerAuthority>();
             LocalManager.updateAuthority = packet.RocketIds;
+
+            foreach (int id in LocalManager.updateAuthority)
+            {
+                if (LocalManager.syncedRockets.TryGetValue(id, out LocalRocket rocket))
+                {
+
+                }
+            }
         }
 
         static void OnPacket_UpdateWorldTime(NetIncomingMessage msg)
@@ -322,8 +332,7 @@ namespace MultiplayerSFS.Mod
             Packet_UpdateWorldTime packet = msg.Read<Packet_UpdateWorldTime>();
             if (WorldTime.main != null)
             {
-                world.WorldTime = packet.WorldTime;
-                WorldTime.main.worldTime = world.WorldTime;
+                WorldTime.main.worldTime = world.WorldTime = packet.WorldTime;
             }
         }
         
@@ -347,28 +356,39 @@ namespace MultiplayerSFS.Mod
         {
             Packet_CreateRocket packet = msg.Read<Packet_CreateRocket>();
             world.rockets[packet.GlobalId] = packet.Rocket;
-            LocalManager.CreateRocket(packet);
+            LocalManager.OnPacket_CreateRocket(packet);
         }
 
         static void OnPacket_DestroyRocket(NetIncomingMessage msg)
         {
             Packet_DestroyRocket packet = msg.Read<Packet_DestroyRocket>();
-            world.rockets.Remove(packet.Id);
+            world.rockets.Remove(packet.RocketId);
             LocalManager.TrueDestructionReason = packet.Reason;
-            LocalManager.DestroyLocalRocket(packet.Id);
+            LocalManager.DestroyLocalRocket(packet.RocketId);
         }
 
-        static void OnPacket_UpdateRocket(NetIncomingMessage msg)
+        static void OnPacket_UpdateRocketPrimary(NetIncomingMessage msg)
         {
-            Packet_UpdateRocket packet = msg.Read<Packet_UpdateRocket>();
-            if (world.rockets.TryGetValue(packet.Id, out RocketState state))
+            Packet_UpdateRocketPrimary packet = msg.Read<Packet_UpdateRocketPrimary>();
+            if (world.rockets.TryGetValue(packet.RocketId, out RocketState state))
             {
-                state.UpdateRocket(packet);
-                LocalManager.UpdateLocalRocket(packet);
+                state.UpdateRocketPrimary(packet);
+                Interpolator.AddPacketToQueue(packet, packet.RocketId, packet.WorldTime);
+                // Debug.Log($"Update rocket!!! {} => {}");
             }
             else
             {
-                Debug.LogError($"Missing rocket from world state!");
+                Debug.Log("Missing rocket from world state!!!");
+            }
+        }
+
+        static void OnPacket_UpdateRocketSecondary(NetIncomingMessage msg)
+        {
+            Packet_UpdateRocketSecondary packet = msg.Read<Packet_UpdateRocketSecondary>();
+            if (world.rockets.TryGetValue(packet.RocketId, out RocketState state))
+            {
+                state.UpdateRocketSecondary(packet);
+                Interpolator.AddPacketToQueue(packet, packet.RocketId, packet.WorldTime);
             }
         }
 
@@ -378,8 +398,7 @@ namespace MultiplayerSFS.Mod
             if (world.rockets.TryGetValue(packet.RocketId, out RocketState state))
             {
                 state.RemovePart(packet.PartId);
-                LocalManager.TrueDestructionReason = packet.Reason;
-                LocalManager.DestroyLocalPart(packet);
+                Interpolator.AddPacketToQueue(packet, packet.PartId, packet.WorldTime);
             }
         }
 
@@ -389,7 +408,7 @@ namespace MultiplayerSFS.Mod
             if (world.rockets.TryGetValue(packet.RocketId, out RocketState state))
             {
                 state.stages = packet.Stages;
-                LocalManager.UpdateLocalStaging(packet);
+                Interpolator.AddPacketToQueue(packet, packet.RocketId, packet.WorldTime);
             }
         }
 
@@ -402,23 +421,7 @@ namespace MultiplayerSFS.Mod
 				{
 					partState.part.TOGGLE_VARIABLES["engine_on"] = packet.EngineOn;
 				}
-                
-                if (LocalManager.syncedRockets.TryGetValue(packet.RocketId, out LocalRocket rocket))
-                {
-                    if (rocket.parts.TryGetValue(packet.PartId, out Part part))
-                    {
-                        EngineModule[] modules = part.GetModules<EngineModule>();
-                        if (modules.Length > 1)
-                        {
-                            Debug.LogWarning($"OnPacket_UpdatePart_EngineModule: Found multiple engine modules on part \"{part.Name}\".");
-                        }
-                        modules[0].engineOn.Value = packet.EngineOn;
-                    }
-                }
-            }
-            else
-            {
-                Debug.LogError($"Missing rocket from world state!");
+                Interpolator.AddPacketToQueue(packet, packet.RocketId, packet.WorldTime);
             }
         }
 
@@ -431,23 +434,7 @@ namespace MultiplayerSFS.Mod
 				{
 					partState.part.TOGGLE_VARIABLES["wheel_on"] = packet.WheelOn;
 				}
-                
-                if (LocalManager.syncedRockets.TryGetValue(packet.RocketId, out LocalRocket rocket))
-                {
-                    if (rocket.parts.TryGetValue(packet.PartId, out Part part))
-                    {
-                        WheelModule[] modules = part.GetModules<WheelModule>();
-                        if (modules.Length > 1)
-                        {
-                            Debug.LogWarning($"OnPacket_UpdatePart_WheelModule: Found multiple wheel modules on part \"{part.Name}\".");
-                        }
-                        modules[0].on.Value = packet.WheelOn;
-                    }
-                }
-            }
-            else
-            {
-                Debug.LogError($"Missing rocket from world state!");
+                Interpolator.AddPacketToQueue(packet, packet.RocketId, packet.WorldTime);
             }
         }
 
@@ -460,25 +447,7 @@ namespace MultiplayerSFS.Mod
 				{
 					partState.part.NUMBER_VARIABLES["fuel_percent"] = packet.FuelPercent;
 				}
-                
-                if (LocalManager.syncedRockets.TryGetValue(packet.RocketId, out LocalRocket rocket))
-                {
-                    if (rocket.parts.TryGetValue(packet.PartId, out Part part))
-                    {
-                        BoosterModule[] modules = part.GetModules<BoosterModule>();
-                        if (modules.Length > 1)
-                        {
-                            Debug.LogWarning($"OnPacket_UpdatePart_BoosterModule: Found multiple booster modules on part \"{part.Name}\".");
-                        }
-                        modules[0].boosterPrimed.Value = packet.Primed;
-                        modules[0].throttle_Out.Value = packet.Throttle;
-                        modules[0].fuelPercent.Value = packet.FuelPercent;
-                    }
-                }
-            }
-            else
-            {
-                Debug.LogError($"Missing rocket from world state!");
+                Interpolator.AddPacketToQueue(packet, packet.RocketId, packet.WorldTime);
             }
         }
 
@@ -492,24 +461,7 @@ namespace MultiplayerSFS.Mod
 					partState.part.NUMBER_VARIABLES["animation_state"] = packet.State;
 					partState.part.NUMBER_VARIABLES["deploy_state"] = packet.TargetState;
 				}
-                
-                if (LocalManager.syncedRockets.TryGetValue(packet.RocketId, out LocalRocket rocket))
-                {
-                    if (rocket.parts.TryGetValue(packet.PartId, out Part part))
-                    {
-                        ParachuteModule[] modules = part.GetModules<ParachuteModule>();
-                        if (modules.Length > 1)
-                        {
-                            Debug.LogWarning($"OnPacket_UpdatePart_ParachuteModule: Found multiple parachute modules on part \"{part.Name}\".");
-                        }
-                        modules[0].state.Value = packet.State;
-                        modules[0].targetState.Value = packet.TargetState;
-                    }
-                }
-            }
-            else
-            {
-                Debug.LogError($"Missing rocket from world state!");
+                Interpolator.AddPacketToQueue(packet, packet.RocketId, packet.WorldTime);
             }
         }
 
@@ -523,24 +475,7 @@ namespace MultiplayerSFS.Mod
 					partState.part.NUMBER_VARIABLES["state"] = packet.Time;
 					partState.part.NUMBER_VARIABLES["state_target"] = packet.TargetTime;
 				}
-                
-                if (LocalManager.syncedRockets.TryGetValue(packet.RocketId, out LocalRocket rocket))
-                {
-                    if (rocket.parts.TryGetValue(packet.PartId, out Part part))
-                    {
-                        MoveModule[] modules = part.GetModules<MoveModule>();
-                        if (modules.Length > 1)
-                        {
-                            Debug.LogWarning($"OnPacket_UpdatePart_MoveModule: Found multiple move modules on part \"{part.Name}\".");
-                        }
-                        modules[0].time.Value = packet.Time;
-                        modules[0].targetTime.Value = packet.TargetTime;
-                    }
-                }
-            }
-            else
-            {
-                Debug.LogError($"Missing rocket from world state!");
+                Interpolator.AddPacketToQueue(packet, packet.RocketId, packet.WorldTime);
             }
         }
 
@@ -557,24 +492,8 @@ namespace MultiplayerSFS.Mod
                         // TODO! I might need some form of register that associates a part's name and module variable names to their save variable names.
                         partState.part.NUMBER_VARIABLES["fuel_percent"] = packet.ResourcePercent;
                     }
-                    
-                    if (LocalManager.syncedRockets.TryGetValue(packet.RocketId, out LocalRocket rocket))
-                    {
-                        if (rocket.parts.TryGetValue(partId, out Part part))
-                        {
-                            ResourceModule[] modules = part.GetModules<ResourceModule>();
-                            if (modules.Length > 1)
-                            {
-                                Debug.LogWarning($"OnPacket_UpdatePart_ResourceModule: Found multiple resource modules on part \"{part.Name}\".");
-                            }
-                            modules[0].resourcePercent.Value = packet.ResourcePercent;
-                        }
-                    }
                 }
-            }
-            else
-            {
-                Debug.LogError($"Missing rocket from world state!");
+                Interpolator.AddPacketToQueue(packet, packet.RocketId, packet.WorldTime);
             }
         }
     }

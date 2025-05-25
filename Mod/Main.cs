@@ -12,7 +12,7 @@ using Object = UnityEngine.Object;
 
 namespace MultiplayerSFS.Mod
 {
-    public class Main : ModLoader.Mod//, IUpdatable
+    public class Main : ModLoader.Mod// ! , IUpdatable
     {
         public static Main main;
         public static FolderPath buildPersistentFolder;

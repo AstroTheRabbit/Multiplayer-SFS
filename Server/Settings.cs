@@ -52,7 +52,7 @@ namespace MultiplayerSFS.Server
 		public bool blockDuplicatePlayerNames = false; // ! TEST VALUE
 		
 		[ServerConfigVariable(
-			"A time (in milliseconds) after which connected clients will send new `UpdateRocket` packets to the server.",
+			"A time (in milliseconds) after which connected clients will send new packets to the server that update the rockets' locations, resources, etc.",
 			"It's generally recommended to keep this value as it is - higher will increase jitter, lower will increase CPU/network load on both client and server side.",
 			"Updates per second = 1000 / updateRocketsPeriod"
 		)]

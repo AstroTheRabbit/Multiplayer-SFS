@@ -74,7 +74,9 @@ namespace MultiplayerSFS.Mod.Patches
                     (
                         new Packet_CreateRocket()
                         {
+                            WorldTime = ClientManager.world.WorldTime,
                             LocalId = localId,
+                            ForLaunch = true,
                             Rocket = lr.ToState(),
                         }
                     );
@@ -123,6 +125,7 @@ namespace MultiplayerSFS.Mod.Patches
                         (
                             new Packet_DestroyPart()
                             {
+                                WorldTime = ClientManager.world.WorldTime,
                                 RocketId = rocketId,
                                 PartId = partId,
                                 CreateExplosion = createExplosion,
@@ -162,16 +165,46 @@ namespace MultiplayerSFS.Mod.Patches
                         (
                             new Packet_DestroyRocket()
                             {
-                                Id = id,
+                                WorldTime = ClientManager.world.WorldTime,
+                                RocketId = id,
                                 Reason = reason,
                             }
                         );
                         return true;
                     }
-
                     return false;
                 }
                 return true;
+            }
+
+            public static void Postfix(Rocket rocket)
+            {
+                if (ClientManager.multiplayerEnabled)
+                {
+                    if (PlayerController.main.player.Value is Rocket newRocket && newRocket != rocket)
+                    {
+                        int id = LocalManager.GetSyncedRocketID(newRocket);
+                        if (id >= 0)
+                        {
+                            ClientManager.SendPacket
+                            (
+                                new Packet_UpdatePlayerControl()
+                                {
+                                    PlayerId = ClientManager.playerId,
+                                    RocketId = id,
+                                }
+                            );
+                            return;
+                        }
+                        id = LocalManager.GetUnsyncedRocketID(newRocket);
+                        if (id >= 0)
+                        {
+                            LocalManager.unsyncedToControl = id;
+                            return;
+                        }
+                        Debug.LogWarning("`RocketManager_DestroyRocket`: Player is controlling unregistered rocket!");
+                    }
+                }
             }
         }
 
@@ -219,6 +252,7 @@ namespace MultiplayerSFS.Mod.Patches
                     (
                         new Packet_CreateRocket()
                         {
+                            WorldTime = ClientManager.world.WorldTime,
                             GlobalId = rocketId,
                             Rocket = localState,
                         }
@@ -235,6 +269,7 @@ namespace MultiplayerSFS.Mod.Patches
                         (
                             new Packet_CreateRocket()
                             {
+                                WorldTime = ClientManager.world.WorldTime,
                                 LocalId = localId,
                                 Rocket = localChildState,
                             }
@@ -282,6 +317,7 @@ namespace MultiplayerSFS.Mod.Patches
                         (
                             new Packet_UpdateStaging()
                             {
+                                WorldTime = ClientManager.world.WorldTime,
                                 RocketId = rocketId,
                                 Stages = stages,
                             }
@@ -295,6 +331,9 @@ namespace MultiplayerSFS.Mod.Patches
             }
         }
 
+        /// <summary>
+        /// Syncs the vanilla game's world time with that of the multiplayer client.
+        /// </summary>
         [HarmonyPatch(typeof(WorldTime), "Update")]
         public static class WorldTime_Update
         {
@@ -347,6 +386,18 @@ namespace MultiplayerSFS.Mod.Patches
                         found_stfld = true;
                     }
                 }
+            }
+        }
+
+        /// <summary>
+        /// Prevents strange behaviour for interpolated rockets (falling through terrain, etc).
+        /// </summary>
+        [HarmonyPatch(typeof(Rocket), "SFS.World.I_Physics.OnFixedUpdate")]
+        public static class Rocket_OnFixedUpdate
+        {
+            public static bool Prefix(Rocket __instance)
+            {
+                return !(ClientManager.multiplayerEnabled && __instance.rb2d.bodyType != RigidbodyType2D.Dynamic);
             }
         }
     }

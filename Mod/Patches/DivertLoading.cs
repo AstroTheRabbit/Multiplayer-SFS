@@ -172,7 +172,7 @@ namespace MultiplayerSFS.Mod.Patches
                         (
                             new Packet_DestroyRocket()
                             {
-                                Id = id,
+                                RocketId = id,
                             }
                         );
                     }
@@ -266,14 +266,16 @@ namespace MultiplayerSFS.Mod.Patches
 
                 foreach (KeyValuePair<int, RocketState> rocket in ClientManager.world.rockets)
                 {
-                    if (IsOnLaunchpad(rocket.Value))
+                    if (GameManager_IsOnLaunchpad.IsOnLaunchpad(rocket.Value.location.address, rocket.Value.location.position))
                     {
+                        Debug.Log(rocket.Value.location.position);
                         newRockets.Add(rocket.Key);
                         foreach (KeyValuePair<int, LocalPlayer> player in LocalManager.players)
                         {
                             if (player.Value.controlledRocket == rocket.Key)
                             {
                                 newPlayers.Add(player.Key);
+                                break;
                             }
                         }
                     }
@@ -291,12 +293,16 @@ namespace MultiplayerSFS.Mod.Patches
                     return false;
                 }
             }
+        }
 
-            static readonly MethodInfo m_IsOnLaunchpad = AccessTools.Method(typeof(GameManager), "IsOnLaunchpad");
-            static bool IsOnLaunchpad(RocketState rocket)
-            {
-                return (bool) m_IsOnLaunchpad.Invoke(null, new object[] { rocket.location.address, rocket.location.position });
-            }
+        /// <summary>
+        /// Reverse patch for use in `BuildManager_Launch_2.UpdateLaunchpadStatus`.
+        /// </summary>
+        [HarmonyPatch(typeof(GameManager), "IsOnLaunchpad")]
+        public static class GameManager_IsOnLaunchpad
+        {
+            [HarmonyReversePatch]
+            public static bool IsOnLaunchpad(string planet, Double2 postion) => throw new NotImplementedException("Harmony Reverse Patch");
         }
     }
 }

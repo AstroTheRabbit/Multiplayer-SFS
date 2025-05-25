@@ -104,7 +104,7 @@ namespace MultiplayerSFS.Common
     public class RocketState : INetData
     {
         public string rocketName;
-        public LocationData location;
+        public NetLocation location;
         public float rotation;
         public float angularVelocity;
         public bool throttleOn;
@@ -125,7 +125,7 @@ namespace MultiplayerSFS.Common
         public RocketState(RocketSave save)
         {
             rocketName = save.rocketName;
-            location = save.location;
+            location = new NetLocation(save.location.position, save.location.velocity, save.location.address);
             rotation = save.rotation;
             angularVelocity = save.angularVelocity;
             throttleOn = save.throttleOn;
@@ -151,18 +151,22 @@ namespace MultiplayerSFS.Common
             stages = save.stages.Select(stage => new StageState(stage, partIndexToID)).ToList();
         }
 
-        public void UpdateRocket(Packet_UpdateRocket packet)
+        public void UpdateRocketPrimary(Packet_UpdateRocketPrimary packet)
+        {
+            location = packet.Location;
+            rotation = packet.Rotation;
+            angularVelocity = packet.AngularVelocity;
+        }
+
+        public void UpdateRocketSecondary(Packet_UpdateRocketSecondary packet)
         {
             input_Turn = packet.Input_Turn;
             input_Raw = packet.Input_Raw;
             input_Horizontal = packet.Input_Horizontal;
             input_Vertical = packet.Input_Vertical;
-            rotation = packet.Rotation;
-            angularVelocity = packet.AngularVelocity;
             throttlePercent = packet.ThrottlePercent;
             throttleOn = packet.ThrottleOn;
             RCS = packet.RCS;
-            location = packet.Location;
         }
 
         /// <summary>
@@ -202,7 +206,7 @@ namespace MultiplayerSFS.Common
         public void Deserialize(NetIncomingMessage msg)
         {
             rocketName = msg.ReadString();
-            location = msg.ReadLocation();
+            location = msg.Read<NetLocation>();
             rotation = msg.ReadFloat();
             angularVelocity = msg.ReadFloat();
             throttleOn = msg.ReadBoolean();

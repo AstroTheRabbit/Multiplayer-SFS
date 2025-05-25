@@ -1,9 +1,9 @@
 using System;
 using System.Collections.Generic;
-using Lidgren.Network;
-using SFS.Parts.Modules;
-using SFS.World;
 using UnityEngine;
+using SFS.World;
+using SFS.Parts.Modules;
+using Lidgren.Network;
 
 namespace MultiplayerSFS.Common
 {
@@ -11,6 +11,34 @@ namespace MultiplayerSFS.Common
     {
         void Serialize(NetOutgoingMessage msg);
         void Deserialize(NetIncomingMessage msg);
+    }
+
+    public class NetLocation : INetData
+    {
+        public Double2 position;
+        public Double2 velocity;
+        public string address;
+
+        public NetLocation() {}
+        public NetLocation(Double2 pos, Double2 vel, string planetName)
+        {
+            position = pos;
+            velocity = vel;
+            address = planetName;
+        }
+
+        public void Serialize(NetOutgoingMessage msg)
+        {
+            msg.Write(position);
+            msg.Write(velocity);
+            msg.Write(address);
+        }
+        public void Deserialize(NetIncomingMessage msg)
+        {
+            position = msg.ReadDouble2();
+            velocity = msg.ReadDouble2();
+            address = msg.ReadString();
+        }
     }
 
     public static class NetDataExtensions
@@ -86,22 +114,6 @@ namespace MultiplayerSFS.Common
         public static Color ReadColor(this NetIncomingMessage msg)
         {
             return new Color(msg.ReadFloat(), msg.ReadFloat(), msg.ReadFloat());
-        }
-
-        public static void Write(this NetOutgoingMessage msg, WorldSave.LocationData location)
-        {
-            msg.Write(location.address);
-            msg.Write(location.position);
-            msg.Write(location.velocity);
-        }
-        public static WorldSave.LocationData ReadLocation(this NetIncomingMessage msg)
-        {
-            return new WorldSave.LocationData()
-            {
-                address = msg.ReadString(),
-                position = msg.ReadDouble2(),
-                velocity = msg.ReadDouble2(),
-            };
         }
 
         public static void Write(this NetOutgoingMessage msg, Orientation orientation)

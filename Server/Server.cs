@@ -47,7 +47,6 @@ namespace MultiplayerSFS.Server
                     {
                         UpdatePlayerAuthorities();
                     }
-					// world.UpdateWorldTime(connectedPlayers.Values.Any(p => p.controlledRocket >= 0));
 				}
 			}
 			catch (Exception e)
@@ -218,7 +217,7 @@ namespace MultiplayerSFS.Server
 			(
 				new Packet_PlayerConnected()
 				{
-					Id = player.id,
+					PlayerId = player.id,
 					Username = player.username,
 					IconColor = player.iconColor,
 					PrintMessage = true,
@@ -244,7 +243,7 @@ namespace MultiplayerSFS.Server
 					connection,
 					new Packet_PlayerConnected()
 					{
-						Id = kvp.Value.id,
+						PlayerId = kvp.Value.id,
 						Username = kvp.Value.username,
 						IconColor = kvp.Value.iconColor,
 						PrintMessage = false,
@@ -264,10 +263,9 @@ namespace MultiplayerSFS.Server
 
 		static void OnPlayerDisconnect(NetConnection connection)
         {
-            ConnectedPlayer player = FindPlayer(connection);
-            if (player != null)
+            if (FindPlayer(connection) is ConnectedPlayer player)
 			{
-				SendPacketToAll(new Packet_PlayerDisconnected() { Id = player.id });
+				SendPacketToAll(new Packet_PlayerDisconnected() { PlayerId = player.id });
 				connectedPlayers.Remove(connection.RemoteEndPoint);
 			}
         }
@@ -280,7 +278,6 @@ namespace MultiplayerSFS.Server
 				player.avgTripTime = msg.SenderConnection.AverageRoundtripTime;
 				Logger.Info($"Average roundtrip time updated for {username} @ {msg.SenderEndPoint} - {1000 * player.avgTripTime}ms.");
 
-				// Logger.Debug($"{msg.SenderConnection.RemoteTimeOffset} : {msg.SenderConnection.AverageRoundtripTime} : {msg.SenderConnection.AverageRoundtripTime / 2}");
 				SendPacketToPlayer
 				(
 					msg.SenderConnection,
@@ -294,16 +291,16 @@ namespace MultiplayerSFS.Server
 
 		static void UpdatePlayerAuthorities()
 		{
+			// * No players are connected or controlling rockets.
+			if (connectedPlayers.Count == 0 ||  connectedPlayers.All(kvp => !world.rockets.ContainsKey(kvp.Value.controlledRocket)))
+            {
+                return;
+            }
+
 			foreach (ConnectedPlayer player in connectedPlayers.Values)
 			{
 				player.updateAuthority.Clear();
 			}
-
-			// * No players are connected or controlling rockets.
-			if (connectedPlayers.All(kvp => kvp.Value.controlledRocket == -1))
-            {
-                return;
-            }
 
 			int maxCount = 1;
 			foreach (KeyValuePair<int, RocketState> kvp in world.rockets)
@@ -345,10 +342,6 @@ namespace MultiplayerSFS.Server
                     }
 
 				}
-				if (bestPlayer == null)
-				{
-					Logger.Error("bestPlayer is null!");
-				}
 				bestPlayer.updateAuthority.Add(kvp.Key);
 			}
 
@@ -371,7 +364,7 @@ namespace MultiplayerSFS.Server
         static bool OnIncomingPacket(NetIncomingMessage msg)
         {
             PacketType packetType = (PacketType) msg.ReadByte();
-			if (packetType != PacketType.UpdateRocket && packetType != PacketType.UpdatePart_ResourceModule)
+			if (Packet.ShouldDebug(packetType))
 				Logger.Debug($"Recieved packet of type '{packetType}'.");
 			switch (packetType)
 			{
@@ -386,13 +379,15 @@ namespace MultiplayerSFS.Server
                     return false;
 
 				case PacketType.CreateRocket:
-					OnPacket_CreateRocket(msg);
-					return true;
+					return OnPacket_CreateRocket(msg);
 				case PacketType.DestroyRocket:
 					OnPacket_DestroyRocket(msg);
 					return true;
-				case PacketType.UpdateRocket:
-					OnPacket_UpdateRocket(msg);
+				case PacketType.UpdateRocketPrimary:
+					OnPacket_UpdateRocketPrimary(msg);
+					return false;
+				case PacketType.UpdateRocketSecondary:
+					OnPacket_UpdateRocketSecondary(msg);
 					return false;
 
 				case PacketType.DestroyPart:
@@ -493,7 +488,7 @@ namespace MultiplayerSFS.Server
 			}
         }
 
-		static void OnPacket_CreateRocket(NetIncomingMessage msg)
+		static bool OnPacket_CreateRocket(NetIncomingMessage msg)
 		{
 			Packet_CreateRocket packet = msg.Read<Packet_CreateRocket>();
 			if (world.rockets.ContainsKey(packet.GlobalId))
@@ -501,23 +496,16 @@ namespace MultiplayerSFS.Server
 				// Logger.Debug($"existing: {packet.Rocket.parts.Count}");
                 world.rockets[packet.GlobalId] = packet.Rocket;
             	SendPacketToAll(packet, msg.SenderConnection);
+				return true;
             }
             else
             {
 				// Logger.Debug($"new: {packet.Rocket.parts.Count}");
                 packet.GlobalId = world.rockets.InsertNew(packet.Rocket);
             	SendPacketToAll(packet);
-				if (FindPlayer(msg.SenderConnection) is ConnectedPlayer player)
-				{
-					player.updateAuthority.Add(packet.GlobalId);
-					SendPacketToPlayer
-					(
-						msg.SenderConnection, new Packet_UpdatePlayerAuthority()
-						{
-							RocketIds = player.updateAuthority,
-						}
-					);
-				}
+				// * This is to prevent update authority being given to a different player than the one that launched the rocket, which can cause some strange issues.
+				// * The update authority is updated when the player has switched to their newly launched rocket, however.
+				return !packet.ForLaunch;
             }
 
 		}
@@ -525,18 +513,28 @@ namespace MultiplayerSFS.Server
 		static void OnPacket_DestroyRocket(NetIncomingMessage msg)
 		{
 			Packet_DestroyRocket packet = msg.Read<Packet_DestroyRocket>();
-			if (world.rockets.Remove(packet.Id))
+			if (world.rockets.Remove(packet.RocketId))
             {
                 SendPacketToAll(packet, msg.SenderConnection);
             }
 		}
 
-		static void OnPacket_UpdateRocket(NetIncomingMessage msg)
+		static void OnPacket_UpdateRocketPrimary(NetIncomingMessage msg)
 		{
-			Packet_UpdateRocket packet = msg.Read<Packet_UpdateRocket>();
-			if (world.rockets.TryGetValue(packet.Id, out RocketState state))
+			Packet_UpdateRocketPrimary packet = msg.Read<Packet_UpdateRocketPrimary>();
+			if (world.rockets.TryGetValue(packet.RocketId, out RocketState state))
 			{
-				state.UpdateRocket(packet);
+				state.UpdateRocketPrimary(packet);
+				SendPacketToAll(packet, msg.SenderConnection);
+			}
+		}
+
+		static void OnPacket_UpdateRocketSecondary(NetIncomingMessage msg)
+		{
+			Packet_UpdateRocketSecondary packet = msg.Read<Packet_UpdateRocketSecondary>();
+			if (world.rockets.TryGetValue(packet.RocketId, out RocketState state))
+			{
+				state.UpdateRocketSecondary(packet);
 				SendPacketToAll(packet, msg.SenderConnection);
 			}
 		}

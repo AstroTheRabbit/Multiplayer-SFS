@@ -57,9 +57,13 @@ namespace MultiplayerSFS.Common
         /// </summary>
         DestroyRocket,
         /// <summary>
-        /// Sent to update a rocket's current state, which includes throttle, RCS, movement controls, location, rotation, and angular velocity.
+        /// Sent to update a rocket's position, velocity, rotation, and angular velocity.
         /// </summary>
-        UpdateRocket,
+        UpdateRocketPrimary,
+        /// <summary>
+        /// Sent to update a rocket's inputs, throttle status, and RCS.
+        /// </summary>
+        UpdateRocketSecondary,
 
         // * Part & Staging Packets
         /// <summary>
@@ -103,6 +107,17 @@ namespace MultiplayerSFS.Common
         public abstract PacketType Type { get; }
         public abstract void Serialize(NetOutgoingMessage msg);
         public abstract void Deserialize(NetIncomingMessage msg);
+
+        /// <summary>
+        /// Array used to determine if certain packet type should or should not be printed for debugging.
+        /// </summary>
+        static readonly HashSet<PacketType> DoNotDebug = new HashSet<PacketType>
+        {
+            PacketType.UpdateRocketPrimary,
+            PacketType.UpdateRocketSecondary,
+            PacketType.UpdatePart_ResourceModule,
+        };
+        public static bool ShouldDebug(PacketType type) => !DoNotDebug.Contains(type);
     }
 
     // * Player/server Info Packets
@@ -128,7 +143,7 @@ namespace MultiplayerSFS.Common
         public int PlayerId { get; set; } = -1;
         public double UpdateRocketsPeriod { get; set; }
         public double ChatMessageCooldown { get; set; }
-        public double WorldTime { get; set; }
+        public double WorldTime { get; set; } = double.NaN;
         public double SendTime { get; set; }
         public Difficulty.DifficultyType Difficulty { get; set; }
 
@@ -155,7 +170,7 @@ namespace MultiplayerSFS.Common
     }
     public class Packet_PlayerConnected : Packet
     {
-        public int Id { get; set; } = -1;
+        public int PlayerId { get; set; } = -1;
         public string Username { get; set; }
         public Color IconColor { get; set; }
         public bool PrintMessage { get; set; }
@@ -163,14 +178,14 @@ namespace MultiplayerSFS.Common
         public override PacketType Type => PacketType.PlayerConnected;
         public override void Serialize(NetOutgoingMessage msg)
         {
-            msg.Write(Id);
+            msg.Write(PlayerId);
             msg.Write(Username);
             msg.Write(IconColor);
             msg.Write(PrintMessage);
         }
         public override void Deserialize(NetIncomingMessage msg)
         {
-            Id = msg.ReadInt32();
+            PlayerId = msg.ReadInt32();
             Username = msg.ReadString();
             IconColor = msg.ReadColor();
             PrintMessage = msg.ReadBoolean();
@@ -178,16 +193,16 @@ namespace MultiplayerSFS.Common
     }
     public class Packet_PlayerDisconnected : Packet
     {
-        public int Id { get; set; } = -1;
+        public int PlayerId { get; set; } = -1;
 
         public override PacketType Type => PacketType.PlayerDisconnected;
         public override void Serialize(NetOutgoingMessage msg)
         {
-            msg.Write(Id);
+            msg.Write(PlayerId);
         }
         public override void Deserialize(NetIncomingMessage msg)
         {
-            Id = msg.ReadInt32();
+            PlayerId = msg.ReadInt32();
         }
     }
     public class Packet_UpdatePlayerControl : Packet
@@ -224,7 +239,7 @@ namespace MultiplayerSFS.Common
 
     public class Packet_UpdateWorldTime : Packet
     {
-        public double WorldTime { get; set; }
+        public double WorldTime { get; set; } = double.NaN;
         
         public override PacketType Type => PacketType.UpdateWorldTime;
         public override void Serialize(NetOutgoingMessage msg)
@@ -276,93 +291,121 @@ namespace MultiplayerSFS.Common
     // * Rocket Packets
     public class Packet_CreateRocket : Packet
     {
+        public double WorldTime { get; set; } = double.NaN;
         public int LocalId { get; set; } = -1;
         public int GlobalId { get; set; } = -1;
+        public bool ForLaunch { get; set; } = false;
         public RocketState Rocket { get; set; }
 
         public override PacketType Type => PacketType.CreateRocket;
         public override void Serialize(NetOutgoingMessage msg)
         {
+            msg.Write(WorldTime);
             msg.Write(LocalId);
             msg.Write(GlobalId);
+            msg.Write(ForLaunch);
             msg.Write(Rocket);
         }
         public override void Deserialize(NetIncomingMessage msg)
         {
+            WorldTime = msg.ReadDouble();
             LocalId = msg.ReadInt32();
             GlobalId = msg.ReadInt32();
+            ForLaunch = msg.ReadBoolean();
             Rocket = msg.Read<RocketState>();
         }
     }
     public class Packet_DestroyRocket : Packet
     {
-        public int Id { get; set; } = -1;
+        public double WorldTime { get; set; } = double.NaN;
+        public int RocketId { get; set; } = -1;
         public DestructionReason Reason { get; set; }
 
         public override PacketType Type => PacketType.DestroyRocket;
         public override void Serialize(NetOutgoingMessage msg)
         {
-            msg.Write(Id);
+            msg.Write(WorldTime);
+            msg.Write(RocketId);
             msg.Write((byte) Reason);
         }
         public override void Deserialize(NetIncomingMessage msg)
         {
-            Id = msg.ReadInt32();
+            WorldTime = msg.ReadDouble();
+            RocketId = msg.ReadInt32();
             Reason = (DestructionReason) msg.ReadByte();
         }
     }
-    public class Packet_UpdateRocket : Packet
+    public class Packet_UpdateRocketPrimary : Packet
     {
-        public int Id { get; set; } = -1;
+        public double WorldTime { get; set; } = double.NaN;
+        public int RocketId { get; set; } = -1;
+        public NetLocation Location { get; set; }
+        public float Rotation { get; set; }
+        public float AngularVelocity { get; set; }
+
+        public override PacketType Type => PacketType.UpdateRocketPrimary;
+        public override void Serialize(NetOutgoingMessage msg)
+        {
+            msg.Write(WorldTime);
+            msg.Write(RocketId);
+            msg.Write(Location);
+            msg.Write(Rotation);
+            msg.Write(AngularVelocity);
+        }
+        public override void Deserialize(NetIncomingMessage msg)
+        {
+            WorldTime = msg.ReadDouble();
+            RocketId = msg.ReadInt32();
+            Location = msg.Read<NetLocation>();
+            Rotation = msg.ReadFloat();
+            AngularVelocity = msg.ReadFloat();
+        }
+    }
+
+    public class Packet_UpdateRocketSecondary : Packet
+    {
+        public double WorldTime { get; set; } = double.NaN;
+        public int RocketId { get; set; } = -1;
         public float Input_Turn { get; set; }
         // * Since the directional axes differ from the raw input depending on the controlling player's camera rotation, it's easier to just send all three values.
         public Vector2 Input_Raw { get; set; }
         public Vector2 Input_Horizontal { get; set; }
         public Vector2 Input_Vertical { get; set; }
-        public float Rotation { get; set; }
-        public float AngularVelocity { get; set; }
         public float ThrottlePercent { get; set; }
         public bool ThrottleOn { get; set; }
         public bool RCS { get; set; }
-        public LocationData Location { get; set; }
-        public double WorldTime { get;  set; }
 
-        public override PacketType Type => PacketType.UpdateRocket;
+        public override PacketType Type => PacketType.UpdateRocketSecondary;
         public override void Serialize(NetOutgoingMessage msg)
         {
-            msg.Write(Id);
+            msg.Write(WorldTime);
+            msg.Write(RocketId);
             msg.Write(Input_Turn);
             msg.Write(Input_Raw);
             msg.Write(Input_Horizontal);
             msg.Write(Input_Vertical);
-            msg.Write(Rotation);
-            msg.Write(AngularVelocity);
             msg.Write(ThrottlePercent);
             msg.Write(ThrottleOn);
             msg.Write(RCS);
-            msg.Write(Location);
-            msg.Write(WorldTime);
         }
         public override void Deserialize(NetIncomingMessage msg)
         {
-            Id = msg.ReadInt32();
+            WorldTime = msg.ReadDouble();
+            RocketId = msg.ReadInt32();
             Input_Turn = msg.ReadFloat();
             Input_Raw = msg.ReadVector2();
             Input_Horizontal = msg.ReadVector2();
             Input_Vertical = msg.ReadVector2();
-            Rotation = msg.ReadFloat();
-            AngularVelocity = msg.ReadFloat();
             ThrottlePercent = msg.ReadFloat();
             ThrottleOn = msg.ReadBoolean();
             RCS = msg.ReadBoolean();
-            Location = msg.ReadLocation();
-            WorldTime = msg.ReadDouble();
         }
-    } 
+    }
 
     // * Part & Staging Packets
     public class Packet_DestroyPart : Packet
     {
+        public double WorldTime { get; set; } = double.NaN;
         public int RocketId { get; set; } = -1;
         public int PartId { get; set; } = -1;
         public bool CreateExplosion { get; set; }
@@ -371,6 +414,7 @@ namespace MultiplayerSFS.Common
         public override PacketType Type => PacketType.DestroyPart;
         public override void Serialize(NetOutgoingMessage msg)
         {
+            msg.Write(WorldTime);
             msg.Write(RocketId);
             msg.Write(PartId);
             msg.Write(CreateExplosion);
@@ -378,6 +422,7 @@ namespace MultiplayerSFS.Common
         }
         public override void Deserialize(NetIncomingMessage msg)
         {
+            WorldTime = msg.ReadDouble();
             RocketId = msg.ReadInt32();
             PartId = msg.ReadInt32();
             CreateExplosion = msg.ReadBoolean();
@@ -386,23 +431,27 @@ namespace MultiplayerSFS.Common
     }
     public class Packet_UpdateStaging : Packet
     {
+        public double WorldTime { get; set; } = double.NaN;
         public int RocketId { get; set; } = -1;
         public List<StageState> Stages {get; set; }
 
         public override PacketType Type => PacketType.UpdateStaging;
         public override void Serialize(NetOutgoingMessage msg)
         {
+            msg.Write(WorldTime);
             msg.Write(RocketId);
             msg.WriteCollection(Stages, msg.Write);
         }
         public override void Deserialize(NetIncomingMessage msg)
         {
+            WorldTime = msg.ReadDouble();
             RocketId = msg.ReadInt32();
             Stages = msg.ReadCollection(count => new List<StageState>(count), () => msg.Read<StageState>());
         }
     }
     public class Packet_UpdatePart_EngineModule : Packet
     {
+        public double WorldTime { get; set; } = double.NaN;
         public int RocketId { get; set; } = -1;
         public int PartId { get; set; } = -1;
         public bool EngineOn { get; set; }
@@ -410,12 +459,14 @@ namespace MultiplayerSFS.Common
         public override PacketType Type => PacketType.UpdatePart_EngineModule;
         public override void Serialize(NetOutgoingMessage msg)
         {
+            msg.Write(WorldTime);
             msg.Write(RocketId);
             msg.Write(PartId);
             msg.Write(EngineOn);
         }
         public override void Deserialize(NetIncomingMessage msg)
         {
+            WorldTime = msg.ReadDouble();
             RocketId = msg.ReadInt32();
             PartId = msg.ReadInt32();
             EngineOn = msg.ReadBoolean();
@@ -423,6 +474,7 @@ namespace MultiplayerSFS.Common
     }
     public class Packet_UpdatePart_WheelModule : Packet
     {
+        public double WorldTime { get; set; } = double.NaN;
         public int RocketId { get; set; } = -1;
         public int PartId { get; set; } = -1;
         public bool WheelOn { get; set; }
@@ -430,12 +482,14 @@ namespace MultiplayerSFS.Common
         public override PacketType Type => PacketType.UpdatePart_WheelModule;
         public override void Serialize(NetOutgoingMessage msg)
         {
+            msg.Write(WorldTime);
             msg.Write(RocketId);
             msg.Write(PartId);
             msg.Write(WheelOn);
         }
         public override void Deserialize(NetIncomingMessage msg)
         {
+            WorldTime = msg.ReadDouble();
             RocketId = msg.ReadInt32();
             PartId = msg.ReadInt32();
             WheelOn = msg.ReadBoolean();
@@ -443,6 +497,7 @@ namespace MultiplayerSFS.Common
     }
     public class Packet_UpdatePart_BoosterModule : Packet
     {
+        public double WorldTime { get; set; } = double.NaN;
         public int RocketId { get; set; } = -1;
         public int PartId { get; set; } = -1;
         public bool Primed { get; set; }
@@ -452,6 +507,7 @@ namespace MultiplayerSFS.Common
         public override PacketType Type => PacketType.UpdatePart_BoosterModule;
         public override void Serialize(NetOutgoingMessage msg)
         {
+            msg.Write(WorldTime);
             msg.Write(RocketId);
             msg.Write(PartId);
             msg.Write(Primed);
@@ -460,6 +516,7 @@ namespace MultiplayerSFS.Common
         }
         public override void Deserialize(NetIncomingMessage msg)
         {
+            WorldTime = msg.ReadDouble();
             RocketId = msg.ReadInt32();
             PartId = msg.ReadInt32();
             Primed = msg.ReadBoolean();
@@ -469,6 +526,7 @@ namespace MultiplayerSFS.Common
     }
     public class Packet_UpdatePart_ParachuteModule : Packet
     {
+        public double WorldTime { get; set; } = double.NaN;
         public int RocketId { get; set; } = -1;
         public int PartId { get; set; } = -1;
         public float State { get; set; }
@@ -477,6 +535,7 @@ namespace MultiplayerSFS.Common
         public override PacketType Type => PacketType.UpdatePart_ParachuteModule;
         public override void Serialize(NetOutgoingMessage msg)
         {
+            msg.Write(WorldTime);
             msg.Write(RocketId);
             msg.Write(PartId);
             msg.Write(State);
@@ -484,6 +543,7 @@ namespace MultiplayerSFS.Common
         }
         public override void Deserialize(NetIncomingMessage msg)
         {
+            WorldTime = msg.ReadDouble();
             RocketId = msg.ReadInt32();
             PartId = msg.ReadInt32();
             State = msg.ReadFloat();
@@ -492,6 +552,7 @@ namespace MultiplayerSFS.Common
     }
     public class Packet_UpdatePart_MoveModule : Packet
     {
+        public double WorldTime { get; set; } = double.NaN;
         public int RocketId { get; set; } = -1;
         public int PartId { get; set; } = -1;
         public float Time { get; set; }
@@ -500,6 +561,7 @@ namespace MultiplayerSFS.Common
         public override PacketType Type => PacketType.UpdatePart_MoveModule;
         public override void Serialize(NetOutgoingMessage msg)
         {
+            msg.Write(WorldTime);
             msg.Write(RocketId);
             msg.Write(PartId);
             msg.Write(Time);
@@ -507,6 +569,7 @@ namespace MultiplayerSFS.Common
         }
         public override void Deserialize(NetIncomingMessage msg)
         {
+            WorldTime = msg.ReadDouble();
             RocketId = msg.ReadInt32();
             PartId = msg.ReadInt32();
             Time = msg.ReadFloat();
@@ -516,6 +579,7 @@ namespace MultiplayerSFS.Common
 
     public class Packet_UpdatePart_ResourceModule : Packet
     {
+        public double WorldTime { get; set; } = double.NaN;
         public int RocketId { get; set; } = -1;
         public double ResourcePercent { get; set; }
         public HashSet<int> PartIds { get; set; }
@@ -523,12 +587,14 @@ namespace MultiplayerSFS.Common
         public override PacketType Type => PacketType.UpdatePart_ResourceModule;
         public override void Serialize(NetOutgoingMessage msg)
         {
+            msg.Write(WorldTime);
             msg.Write(RocketId);
             msg.Write(ResourcePercent);
             msg.WriteCollection(PartIds, msg.Write);
         }
         public override void Deserialize(NetIncomingMessage msg)
         {
+            WorldTime = msg.ReadDouble();
             RocketId = msg.ReadInt32();
             ResourcePercent = msg.ReadDouble();
             PartIds = msg.ReadCollection(count => new HashSet<int>(count), msg.ReadInt32);

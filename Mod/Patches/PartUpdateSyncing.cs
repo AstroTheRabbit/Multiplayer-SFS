@@ -102,6 +102,7 @@ namespace MultiplayerSFS.Mod.Patches
                 (
                     new Packet_CreateRocket()
                     {
+                        WorldTime = ClientManager.world.WorldTime,
                         GlobalId = id_a,
                         Rocket = local_a.ToState(),
                     }
@@ -140,6 +141,7 @@ namespace MultiplayerSFS.Mod.Patches
                     (
                         new Packet_UpdatePart_EngineModule()
                         {
+                            WorldTime = ClientManager.world.WorldTime,
                             RocketId = rocketId,
                             PartId = partId,
                             EngineOn = engineOn_new,
@@ -187,6 +189,7 @@ namespace MultiplayerSFS.Mod.Patches
                     (
                         new Packet_UpdatePart_BoosterModule()
                         {
+                            WorldTime = ClientManager.world.WorldTime,
                             RocketId = rocketId,
                             PartId = partId,
                             Primed = primed,
@@ -221,6 +224,7 @@ namespace MultiplayerSFS.Mod.Patches
                     (
                         new Packet_UpdatePart_WheelModule()
                         {
+                            WorldTime = ClientManager.world.WorldTime,
                             RocketId = rocketId,
                             PartId = partId,
                             WheelOn = __instance.on.Value,
@@ -258,6 +262,7 @@ namespace MultiplayerSFS.Mod.Patches
                     (
                         new Packet_UpdatePart_ParachuteModule()
                         {
+                            WorldTime = ClientManager.world.WorldTime,
                             RocketId = rocketId,
                             PartId = partId,
                             State = __instance.state.Value,
@@ -291,6 +296,7 @@ namespace MultiplayerSFS.Mod.Patches
                     (
                         new Packet_UpdatePart_MoveModule()
                         {
+                            WorldTime = ClientManager.world.WorldTime,
                             RocketId = rocketId,
                             PartId = partId,
                             Time = __instance.time.Value,

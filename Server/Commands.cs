@@ -314,7 +314,7 @@ namespace MultiplayerSFS.Server
                     (
                         new Packet_DestroyRocket()
                         {
-                            Id = id,
+                            RocketId = id,
                         }
                     );
                     count++;
