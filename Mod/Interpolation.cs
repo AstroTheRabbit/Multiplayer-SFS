@@ -63,7 +63,7 @@ namespace MultiplayerSFS.Mod
                 // * The player has update authority over this rocket, so no interpolation is required.
                 // * All queued packets should be run to give the player with the latest rocket state.
                 rocket.rocket.rb2d.bodyType = RigidbodyType2D.Dynamic;
-                // rocket.rocket.rb2d.interpolation = RigidbodyInterpolation2D.None;
+                rocket.rocket.rb2d.interpolation = RigidbodyInterpolation2D.None;
                 RunAllPackets();
                 currentUpdate = rocket.rocket.ToUpdatePacketPrimary(currentUpdate.RocketId);
                 return;
@@ -71,7 +71,7 @@ namespace MultiplayerSFS.Mod
             else
             {
                 rocket.rocket.rb2d.bodyType = RigidbodyType2D.Kinematic;
-                // rocket.rocket.rb2d.interpolation = RigidbodyInterpolation2D.Interpolate;
+                rocket.rocket.rb2d.interpolation = RigidbodyInterpolation2D.Extrapolate;
             }
 
             Debug.Log($"update: {updateBuffer.Count}");
@@ -143,8 +143,6 @@ namespace MultiplayerSFS.Mod
             double h10 = t3 + (-2 * t2) + t;
             double h01 = (-2 * t3) + (3 * t2);
             double h11 = t3 - t2;
-
-            // TODO: Try graphing the various positions (interpolated, current, etc) over time just to get an understanding of what the jitter looks like at a lower level.
 
             Location loc = prev.Location.ToVanillaLocation();
             loc.position = (h00 * p0) + (h10 * v0) + (h01 * p1) + (h11 * v1);
